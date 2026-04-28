@@ -87,4 +87,4 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 
 4. **Repo Settings → Actions → General** — Workflow permissions must allow **read** (and **OIDC** is standard for GHA). Ensure Actions are enabled for the repository.
 
-5. **Backend variables** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set; otherwise `terraform init` fails after auth succeeds.
+5. **Backend variables** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Variables**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows now fail earlier with an explicit error.

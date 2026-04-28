@@ -31,6 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require AWS deploy role and Terraform backend variables
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+        run: |
+          err=0
+          if [ -z "$ARN" ]; then echo "::error::AWS_DEPLOY_ROLE_ARN is not set."; err=1; fi
+          if [ -z "${BUCKET}" ]; then echo "::error::TF_STATE_BUCKET is not set."; err=1; fi
+          if [ -z "${LOCK_TABLE}" ]; then echo "::error::TF_LOCK_TABLE is not set."; err=1; fi
+          exit "$err"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
