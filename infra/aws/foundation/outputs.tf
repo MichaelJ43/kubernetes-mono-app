@@ -33,7 +33,7 @@ output "aws_load_balancer_controller_irsa_role_arn" {
 }
 
 output "acm_certificate_arn" {
-  description = "ACM ARN when acm_certificate_domain is set; otherwise null. Use scripts/render-ingress-acm-patch.sh to write deploy/overlays/aws-prod/ingress-acm-patch.yaml."
+  description = "When acm_certificate_domain is set, the matching ISSUED ACM certificate ARN (optional; Argo Ingress uses discovery without this in Git)."
   value       = length(data.aws_acm_certificate.ingress) > 0 ? data.aws_acm_certificate.ingress[0].arn : null
 }
 

@@ -12,7 +12,7 @@ Internet → Route 53 (k8s.michaelj43.dev) → ALB (TLS via ACM)
 
 Git is the **source of truth** for the workload: Argo CD reads `deploy/gitops/` and applies child `Application` objects, which in turn sync Helm/Kustomize paths in this mono-repo.
 
-GitHub Actions builds and publishes the **container image** (`ci.yaml` on `main`). Argo CD deploys that image tag via Kustomize (`deploy/base/api`).
+GitHub Actions builds and publishes the **container image** (`ci.yaml` on `main`). Argo CD deploys that image tag via Kustomize (**`deploy/base/api`**; optional **`deploy/overlays/aws-prod`** wraps the same base).
 
 ## Failure domains
 
@@ -21,7 +21,7 @@ GitHub Actions builds and publishes the **container image** (`ci.yaml` on `main`
 | Single EKS node | Pod eviction / node loss | HPA / second replica (optional); Postgres operator failover if `instances > 1` |
 | EKS control plane | Regional AWS outage | Not mitigated in a single-cluster portfolio; document backups |
 | GitOps desync | Drift between Git and cluster | Argo CD sync status, `selfHeal` (use carefully) |
-| ALB / ACM | TLS or routing break | ACM auto-renewal; validate Ingress annotations |
+| ALB / ACM | TLS or routing break | ACM auto-renewal; cert **discovery** matches Ingress host; optional explicit ARN only outside public Git |
 
 ## Related docs
 
