@@ -1,0 +1,177 @@
+name: Terraform plan
+
+# Optional AWS plan on PR (same-repo only; needs AWS_DEPLOY_ROLE_ARN, secrets TF_STATE_BUCKET, TF_LOCK_TABLE + IAM trust for PRs).
+# Always runs fmt/validate without credentials. k8s_platform plan runs only after foundation state exists in S3.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/aws/**'
+      - '.github/workflows/terraform-plan.yaml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-plan-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive infra/aws/foundation infra/aws/k8s_platform
+      - name: Terraform validate (foundation)
+        working-directory: infra/aws/foundation
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Terraform validate (k8s_platform)
+        working-directory: infra/aws/k8s_platform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+  foundation:
+    needs: [validate]
+    if: github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    outputs:
+      foundation_state_in_s3: ${{ steps.foundation-state.outputs.present }}
+    env:
+      TF_IN_AUTOMATION: true
+      STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AWS deploy role and Terraform backend variables
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
+        run: |
+          err=0
+          if [ -z "$ARN" ]; then
+            echo "::error::Repository secret AWS_DEPLOY_ROLE_ARN is not set. See docs/github-actions.md."
+            err=1
+          fi
+          if [ -z "${BUCKET}" ]; then
+            echo "::error::Repository secret TF_STATE_BUCKET is not set (Settings → Secrets and variables → Actions → Secrets)."
+            err=1
+          fi
+          if [ -z "${LOCK_TABLE}" ]; then
+            echo "::error::Repository secret TF_LOCK_TABLE is not set."
+            err=1
+          fi
+          if [ "$err" -ne 0 ]; then
+            echo "::error::Terraform S3 backend requires secrets TF_STATE_BUCKET and TF_LOCK_TABLE. See docs/github-actions.md."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Terraform init (foundation)
+        working-directory: infra/aws/foundation
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.STATE_KEY_FOUNDATION }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform plan (foundation)
+        id: plan-foundation
+        working-directory: infra/aws/foundation
+        env:
+          TF_VAR_github_organization: ${{ github.repository_owner }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+        run: terraform plan -input=false -no-color
+
+      - name: Foundation state present in S3 (k8s_platform needs remote_state)
+        id: foundation-state
+        if: success()
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          if aws s3api head-object --bucket "$BUCKET" --key "${{ env.STATE_KEY_FOUNDATION }}" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No foundation state object in S3 yet — skipping k8s_platform plan until the first **foundation** apply has run."
+          fi
+
+  k8s_platform:
+    runs-on: ubuntu-latest
+    needs: [foundation]
+    if: github.event.pull_request.head.repo.fork == false && needs.foundation.outputs.foundation_state_in_s3 == 'true'
+    env:
+      TF_IN_AUTOMATION: true
+      STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+      STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AWS deploy role and Terraform backend variables
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
+        run: |
+          err=0
+          if [ -z "$ARN" ]; then echo "::error::AWS_DEPLOY_ROLE_ARN is not set."; err=1; fi
+          if [ -z "${BUCKET}" ]; then echo "::error::TF_STATE_BUCKET is not set."; err=1; fi
+          if [ -z "${LOCK_TABLE}" ]; then echo "::error::TF_LOCK_TABLE is not set."; err=1; fi
+          exit "$err"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Terraform init (k8s_platform)
+        working-directory: infra/aws/k8s_platform
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.STATE_KEY_K8S_PLATFORM }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform plan (k8s_platform)
+        working-directory: infra/aws/k8s_platform
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
+        run: terraform plan -input=false -no-color

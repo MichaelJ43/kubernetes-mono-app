@@ -1,22 +1,32 @@
 # Runbook: Bootstrap
 
-**Goal:** EKS cluster exists, ALB controller installed (for Ingress), `kubectl` context works from your machine or CI.
+## 0. Terraform (VPC + EKS + LB controller + GitHub OIDC roles)
+
+Use **Terraform** for the **Kubernetes platform** the cluster runs on. Argo CD does **not** create EKS.
+
+See **[`infra/aws/README.md`](../../infra/aws/README.md)** and **[`docs/github-actions.md`](../../docs/github-actions.md)** for:
+
+- S3 + DynamoDB state/lock
+- **Secrets**: `AWS_DEPLOY_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_LOCK_TABLE` (optional `TF_STATE_REGION`)
+
+**Order:** `foundation` apply → `k8s_platform` apply (or use **Terraform apply** workflow after GitHub secrets exist).
+
+**First time:** run **foundation** (and optionally **k8s_platform**) **locally** with admin AWS credentials so OIDC roles are created; then paste role ARNs into GitHub Secrets.
 
 ## 1. GitHub → AWS (OIDC)
 
-Create an IAM role trusted by GitHub OIDC (`aws-actions/configure-aws-credentials`) with policies allowing:
+After Terraform foundation apply, set:
 
-- `eks:DescribeCluster`, `eks:ListClusters`
-- `sts:GetCallerIdentity`
-- Enough access for `aws eks update-kubeconfig` and Helm installs
-
-Store the role ARN in **`AWS_ROLE_ARN_BOOTSTRAP`** (GitHub secret).
+- **`AWS_DEPLOY_ROLE_ARN`** → your single deploy role (often `github_actions_terraform_role_arn` from foundation)
+- **`TF_STATE_BUCKET`**, **`TF_LOCK_TABLE`**, optionally **`TF_STATE_REGION`** → match your S3/DynamoDB backend (see `docs/github-actions.md`)
 
 ## 2. Install Argo CD
 
-- **CI:** run workflow **Argo CD bootstrap** (`argocd-bootstrap.yaml`) with cluster name + region.
-- **Locally:**  
+- **CI:** workflow **Argo CD bootstrap** (`argocd-bootstrap.yaml`) — use the **same** `cluster_name` and `aws_region` as Terraform (`cluster_name` output / `aws_region` variable).
+- **Locally:**
+
   ```bash
+  aws eks update-kubeconfig --name YOUR_CLUSTER --region YOUR_REGION
   helm repo add argo https://argoproj.github.io/argo-helm
   helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace -f infra/argocd/values.yaml
   kubectl apply -f deploy/gitops/root-app.yaml
@@ -50,3 +60,5 @@ If GHCR packages are **private**, configure pull secrets or `imagePullSecrets` o
 ## Chicken-and-egg
 
 The **root** Application is applied **once** by Actions or admin; Argo then owns all child Applications.
+
+Terraform creates the **cluster and LB controller**; Argo owns **applications** under `deploy/gitops/`.

@@ -10,6 +10,7 @@ Portfolio mono-repo: **Go API**, **GitOps (Argo CD)**, **EKS-oriented manifests*
 |------|------|--------|
 | API | `apps/api` | HTTP `/health`, `/ready`, `/version`, `/items`, `/cache-demo`; goose migrations |
 | GitOps | `deploy/gitops` | App-of-apps + per-stack `Application` CRs |
+| Infra (Terraform) | `infra/aws/foundation`, `infra/aws/k8s_platform` | VPC, EKS, EBS CSI addon, GitHub OIDC roles, Helm AWS LB controller |
 | Manifests | `deploy/base`, `deploy/overlays/aws-prod` | Kustomize; optional ACM patch |
 | Argo install | `infra/argocd/values.yaml` | Used only by bootstrap (Actions or Helm CLI) |
 | CI | `.github/workflows/ci.yaml` | `go test`, image push to GHCR on `main` |
@@ -41,6 +42,7 @@ cd ../../tests/component && docker compose -f docker-compose.yaml up --build
 
 ## Docs
 
+- [`docs/github-actions.md`](docs/github-actions.md) — **Secrets & Variables** for Terraform + Argo workflows
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/aws-domain-tls.md`](docs/aws-domain-tls.md)
 - [`docs/gitops.md`](docs/gitops.md)

@@ -4,7 +4,7 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 
 ## Boundaries
 
-- **Argo CD** reconciles application state from Git: primary declarations live under `deploy/gitops/` (Applications) and `deploy/base/` / `deploy/overlays/` (Kustomize). Do not duplicate “steady state” cluster edits outside Git without documenting drift.
+- **Terraform** (see `infra/aws/`) owns **account/region** resources: VPC, EKS, cluster addons, AWS Load Balancer Controller (Helm in `k8s_platform` stack), and **GitHub OIDC** IAM roles. **Argo CD** owns **Kubernetes application** state under `deploy/gitops/`. See `docs/github-actions.md` for GitHub Secrets/Variables.
 - **GitHub Actions** owns **CI** (build/test/image) and **lifecycle** workflows (Argo bootstrap/teardown)—see `.github/workflows/`.
 - **Secrets** must not be committed in plaintext. Examples: copy patterns from docs; use External Secrets, Sealed Secrets, or manual one-time `kubectl` creation as described in `plan.md` §4.4.
 
@@ -13,6 +13,8 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 | Path | Purpose |
 |------|---------|
 | `apps/api` | Go HTTP API, Dockerfile, OpenAPI |
+| `infra/aws/foundation` | Terraform: VPC, EKS, addons, GitHub OIDC roles, IRSA for LB controller |
+| `infra/aws/k8s_platform` | Terraform: Helm `aws-load-balancer-controller` |
 | `deploy/gitops` | Root `Application` + app-of-apps children |
 | `deploy/base/api` | API Deployment/Service/Ingress Kustomize |
 | `deploy/base/postgres` | CloudNativePG `Cluster` + namespace |
