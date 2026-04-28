@@ -87,3 +87,5 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 4. **Repo Settings → Actions → General** — Workflow permissions must allow **read** (and **OIDC** is standard for GHA). Ensure Actions are enabled for the repository.
 
 5. **Backend secrets** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Secrets**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows fail earlier with an explicit error.
+
+6. **k8s_platform plan skipped or “Unable to find remote state”** — The **k8s_platform** stack reads `terraform_remote_state` for **foundation**. Until the foundation state object exists in your S3 backend (after the first **foundation** `terraform apply`), PR **Terraform plan** only runs the **foundation** plan; **k8s_platform** is skipped with a workflow notice so the PR check stays green.

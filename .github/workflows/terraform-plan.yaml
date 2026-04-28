@@ -1,7 +1,7 @@
 name: Terraform plan
 
 # Optional AWS plan on PR (same-repo only; needs AWS_DEPLOY_ROLE_ARN, secrets TF_STATE_BUCKET, TF_LOCK_TABLE + IAM trust for PRs).
-# Always runs fmt/validate without credentials.
+# Always runs fmt/validate without credentials. k8s_platform plan runs only after foundation state exists in S3.
 
 on:
   pull_request:
@@ -45,6 +45,8 @@ jobs:
     needs: [validate]
     if: github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
+    outputs:
+      foundation_state_in_s3: ${{ steps.foundation-state.outputs.present }}
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
@@ -106,11 +108,23 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
         run: terraform plan -input=false -no-color
 
+      - name: Foundation state present in S3 (k8s_platform needs remote_state)
+        id: foundation-state
+        if: success()
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          if aws s3api head-object --bucket "$BUCKET" --key "${{ env.STATE_KEY_FOUNDATION }}" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No foundation state object in S3 yet — skipping k8s_platform plan until the first **foundation** apply has run."
+          fi
+
   k8s_platform:
     runs-on: ubuntu-latest
     needs: [foundation]
-    if: github.event.pull_request.head.repo.fork == false
-    continue-on-error: true
+    if: github.event.pull_request.head.repo.fork == false && needs.foundation.outputs.foundation_state_in_s3 == 'true'
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
