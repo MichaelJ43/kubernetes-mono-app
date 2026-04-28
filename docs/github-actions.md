@@ -77,3 +77,15 @@ The **GitHub OIDC IAM roles** (`github_actions_terraform_role_arn` and `github_a
 ## CI image push
 
 **`ci.yaml`** uses the repo’s **`GITHUB_TOKEN`** automatically (no extra secret) with **`permissions: packages: write`** to push to GHCR.
+
+## Troubleshooting: Terraform plan + OIDC (“Could not load credentials”)
+
+1. **`AWS_ROLE_ARN_TERRAFORM` empty** — The workflow now fails fast with a clear error. Set the secret to Terraform output `github_actions_terraform_role_arn`.
+
+2. **IAM trust `sub` mismatch** — The role must trust GitHub’s OIDC subject for **pull requests**, e.g. `repo:YOUR_ORG/YOUR_REPO:pull_request` (and branch pushes). This repo’s Terraform allows `repo:<org>/<repo>:*` plus **lowercase org/repo** variants so `MichaelJ43` vs `michaelj43` does not break STS. After changing `iam_github_oidc.tf`, run **`terraform apply`** on **foundation** and wait for IAM to update.
+
+3. **Fork PRs** — Secrets are not available on workflows triggered from forks. The **plan** jobs only run when `pull_request.head.repo.fork == false`. **fmt/validate** still runs.
+
+4. **Repo Settings → Actions → General** — Workflow permissions must allow **read** (and **OIDC** is standard for GHA). Ensure Actions are enabled for the repository.
+
+5. **Backend variables** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set; otherwise `terraform init` fails after auth succeeds.

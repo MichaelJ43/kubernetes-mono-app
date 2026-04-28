@@ -2,6 +2,17 @@ data "tls_certificate" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
+locals {
+  # GitHub's OIDC "sub" claim is case-sensitive; Actions may emit the owner in a different
+  # casing than var.github_organization (e.g. michaelj43 vs MichaelJ43). Allow both.
+  github_oidc_sub_wildcards = distinct([
+    "repo:${var.github_organization}/${var.github_repository}:*",
+    "repo:${lower(var.github_organization)}/${var.github_repository}:*",
+    "repo:${var.github_organization}/${lower(var.github_repository)}:*",
+    "repo:${lower(var.github_organization)}/${lower(var.github_repository)}:*",
+  ])
+}
+
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 
@@ -36,9 +47,7 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        "repo:${var.github_organization}/${var.github_repository}:*",
-      ]
+      values   = local.github_oidc_sub_wildcards
     }
   }
 }

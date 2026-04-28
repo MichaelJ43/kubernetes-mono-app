@@ -1,6 +1,7 @@
 name: Terraform plan
 
-# Plans foundation (and k8s_platform if foundation state already exists).
+# Optional AWS plan on PR (same-repo only; needs AWS_ROLE_ARN_TERRAFORM + IAM trust for PRs).
+# Always runs fmt/validate without credentials.
 
 on:
   pull_request:
@@ -19,17 +20,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive infra/aws/foundation infra/aws/k8s_platform
+      - name: Terraform validate (foundation)
+        working-directory: infra/aws/foundation
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Terraform validate (k8s_platform)
+        working-directory: infra/aws/k8s_platform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
   foundation:
+    needs: [validate]
+    if: github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
-      # Fallback when TF_STATE_REGION repo variable is not set yet
       AWS_REGION: ${{ vars.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Require Terraform OIDC role secret
+        env:
+          ARN: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+        run: |
+          if [ -z "$ARN" ]; then
+            echo "::error::Repository secret AWS_ROLE_ARN_TERRAFORM is not set. After infra/aws/foundation apply, set it to output github_actions_terraform_role_arn (docs/github-actions.md)."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
@@ -59,10 +91,10 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
         run: terraform plan -input=false -no-color
 
-  # Runs only after foundation has been applied at least once (remote state readable).
   k8s_platform:
     runs-on: ubuntu-latest
     needs: [foundation]
+    if: github.event.pull_request.head.repo.fork == false
     continue-on-error: true
     env:
       TF_IN_AUTOMATION: true
@@ -72,7 +104,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Require Terraform OIDC role secret
+        env:
+          ARN: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+        run: |
+          if [ -z "$ARN" ]; then
+            echo "::error::AWS_ROLE_ARN_TERRAFORM is not set."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
