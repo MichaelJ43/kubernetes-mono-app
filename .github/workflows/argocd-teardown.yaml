@@ -1,0 +1,54 @@
+name: Argo CD teardown
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DELETE to uninstall Argo CD from the current cluster context
+        required: true
+        type: string
+      aws_region:
+        description: AWS region of the cluster
+        required: true
+        default: us-east-1
+        type: string
+      cluster_name:
+        description: EKS cluster name
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  teardown:
+    if: github.event.inputs.confirm == 'DELETE'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_BOOTSTRAP }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Install kubectl & helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: kubeconfig
+        run: aws eks update-kubeconfig --name "${{ inputs.cluster_name }}" --region "${{ inputs.aws_region }}"
+
+      - name: Delete root Application (apps managed by Argo may remain — clean namespaces separately)
+        run: kubectl delete -f deploy/gitops/root-app.yaml --ignore-not-found
+
+      - name: Uninstall Argo CD Helm release
+        run: helm uninstall argocd -n argocd --wait || true
+
+      - name: Optionally delete namespace
+        run: |
+          echo "Run manually if desired: kubectl delete namespace argocd"
+          echo "Workloads in other namespaces (e.g. portfolio) are NOT removed by this workflow."

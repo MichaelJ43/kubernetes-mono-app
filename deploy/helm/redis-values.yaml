@@ -1,0 +1,10 @@
+architecture: standalone
+auth:
+  enabled: false
+master:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi

@@ -1,0 +1,13 @@
+# Optional overlay: patch ACM ARN and other prod-only settings.
+#
+#   kubectl kustomize deploy/overlays/aws-prod | kubectl apply -f -
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: portfolio
+
+resources:
+  - ../../base/api
+
+patches:
+  - path: ingress-acm-patch.yaml

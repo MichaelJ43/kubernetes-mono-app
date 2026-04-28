@@ -1,0 +1,23 @@
+# Local secrets (never commit)
+**/secrets.local.yaml
+**/*.local.yaml
+.env
+.env.*
+
+# Go
+bin/
+dist/
+coverage.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Terraform
+infra/aws/**/.terraform/
+infra/aws/**/*.tfstate
+infra/aws/**/*.tfstate.*

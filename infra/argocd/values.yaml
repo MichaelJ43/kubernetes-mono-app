@@ -1,0 +1,17 @@
+server:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+
+controller:
+  replicas: 1
+
+repoServer:
+  replicas: 1
+
+redis:
+  enabled: true
+
+dex:
+  enabled: false

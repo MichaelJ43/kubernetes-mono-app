@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: kubernetes-mono-app API
+  version: 1.0.0
+  description: Portfolio API (health, items, Redis cache demo).
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Liveness
+      responses:
+        '200':
+          description: OK
+  /ready:
+    get:
+      summary: Readiness
+      responses:
+        '200':
+          description: Ready
+        '503':
+          description: Dependency unavailable
+  /version:
+    get:
+      summary: Build version
+      responses:
+        '200':
+          description: Version JSON
+  /items:
+    get:
+      summary: List items from PostgreSQL
+      responses:
+        '200':
+          description: OK
+  /cache-demo:
+    get:
+      summary: Cache-through Redis demo
+      responses:
+        '200':
+          description: OK

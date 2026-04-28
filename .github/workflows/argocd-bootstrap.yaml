@@ -1,0 +1,62 @@
+name: Argo CD bootstrap
+
+# Installs Argo CD into the current kubectl context and applies the root Application.
+# Requires AWS OIDC + IAM role with EKS access (see docs/runbooks/bootstrap.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      cluster_name:
+        description: EKS cluster name
+        required: true
+        type: string
+      aws_region:
+        description: AWS region of the cluster
+        required: true
+        default: us-east-1
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_BOOTSTRAP }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Install tools
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: kubeconfig
+        run: |
+          aws eks update-kubeconfig --name "${{ inputs.cluster_name }}" --region "${{ inputs.aws_region }}"
+
+      - name: Install Argo CD
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace argocd \
+            --create-namespace \
+            --wait \
+            --timeout 15m \
+            -f infra/argocd/values.yaml
+
+      - name: Apply root app-of-apps
+        run: kubectl apply -f deploy/gitops/root-app.yaml
+
+      - name: Hint
+        run: |
+          echo "Get initial admin secret: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+          echo "Port-forward UI: kubectl -n argocd port-forward svc/argocd-server 8080:443"
