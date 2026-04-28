@@ -8,7 +8,7 @@ See **[`infra/aws/README.md`](../../infra/aws/README.md)** and **[`docs/github-a
 
 - S3 + DynamoDB state/lock
 - **Secrets**: `AWS_ROLE_ARN_TERRAFORM`, `AWS_ROLE_ARN_BOOTSTRAP`
-- **Variables**: `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_LOCK_TABLE`, `TF_FOUNDATION_STATE_KEY`, `TF_K8S_PLATFORM_STATE_KEY`
+- **Variables**: `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_LOCK_TABLE` (state S3 keys are derived as `<repo>/foundation/...` and `<repo>/k8s-platform/...` in Actions—see `docs/github-actions.md`)
 
 **Order:** `foundation` apply → `k8s_platform` apply (or use **Terraform apply** workflow after GitHub secrets exist).
 

@@ -1,3 +1,5 @@
+# Same bucket/table/region as foundation; key uses same repo short name as GitHub.
+
 bucket         = "YOUR_STATE_BUCKET"
 key            = "kubernetes-mono-app/k8s-platform/terraform.tfstate"
 region         = "us-east-1"

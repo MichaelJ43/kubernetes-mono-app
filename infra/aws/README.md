@@ -25,7 +25,7 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
    terraform apply
    ```
 4. Note outputs `github_actions_terraform_role_arn` and `github_actions_bootstrap_role_arn` → GitHub **Secrets** (see doc above).
-5. From `infra/aws/k8s_platform`, use a second key (see `examples/backend-k8s-platform.hcl.example`) **or** pass backend flags and:
+5. From `infra/aws/k8s_platform`, use a second key **`<repo>/k8s-platform/terraform.tfstate`** (same repo short name as in step 1) **or** pass backend flags and:
    ```bash
    terraform init -backend-config=backend.hcl
    terraform apply \
@@ -35,6 +35,7 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
      -var="lock_table=YOUR_TABLE" \
      -var="foundation_state_key=kubernetes-mono-app/foundation/terraform.tfstate"
    ```
+   Replace `kubernetes-mono-app` with your repository name if different; it must match the foundation state key prefix.
 
 After that, use **GitHub Actions → Terraform apply** for repeatability.
 

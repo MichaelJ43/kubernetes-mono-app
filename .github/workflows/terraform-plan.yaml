@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: true
+      STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +43,7 @@ jobs:
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ vars.TF_FOUNDATION_STATE_KEY }}" \
+            -backend-config="key=${{ env.STATE_KEY_FOUNDATION }}" \
             -backend-config="region=${{ vars.TF_STATE_REGION }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
@@ -63,6 +64,8 @@ jobs:
     continue-on-error: true
     env:
       TF_IN_AUTOMATION: true
+      STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+      STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
     steps:
       - uses: actions/checkout@v4
 
@@ -82,7 +85,7 @@ jobs:
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=${{ vars.TF_K8S_PLATFORM_STATE_KEY }}" \
+            -backend-config="key=${{ env.STATE_KEY_K8S_PLATFORM }}" \
             -backend-config="region=${{ vars.TF_STATE_REGION }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
@@ -94,5 +97,5 @@ jobs:
           TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ vars.TF_STATE_REGION }}
           TF_VAR_lock_table: ${{ vars.TF_LOCK_TABLE }}
-          TF_VAR_foundation_state_key: ${{ vars.TF_FOUNDATION_STATE_KEY }}
+          TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
         run: terraform plan -input=false -no-color

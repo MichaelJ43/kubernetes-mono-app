@@ -15,13 +15,26 @@ For a first-time bring-up you can set **both secrets to the ARNs output by Terra
 
 | Name | Example | Purpose |
 |------|---------|---------|
-| **`TF_STATE_BUCKET`** | `my-terraform-state-bucket` | S3 bucket for Terraform state (you already have this). |
+| **`TF_STATE_BUCKET`** | `my-terraform-state-bucket` | S3 bucket for Terraform state. |
 | **`TF_STATE_REGION`** | `us-east-1` | Region where the **state bucket and DynamoDB table** live (often same as EKS region). |
 | **`TF_LOCK_TABLE`** | `my-terraform-locks` | DynamoDB table for state locking. |
-| **`TF_FOUNDATION_STATE_KEY`** | `kubernetes-mono-app/foundation/terraform.tfstate` | S3 object key for **foundation** stack (VPC + EKS + IAM + IRSA for LBC). |
-| **`TF_K8S_PLATFORM_STATE_KEY`** | `kubernetes-mono-app/k8s-platform/terraform.tfstate` | S3 object key for **k8s_platform** stack (Helm: AWS Load Balancer Controller). |
 
-Optional convenience (not read by workflows today; use in docs / future):
+### S3 state object keys (no variables)
+
+Terraform workflows derive keys from the GitHub repository **short name** (`github.event.repository.name`, e.g. `kubernetes-mono-app`):
+
+| Stack | S3 key |
+|-------|--------|
+| **foundation** | `<repo>/foundation/terraform.tfstate` |
+| **k8s_platform** | `<repo>/k8s-platform/terraform.tfstate` |
+
+The **k8s_platform** stack’s `foundation_state_key` input matches the foundation key so `terraform_remote_state` resolves correctly.
+
+If you previously set **`TF_FOUNDATION_STATE_KEY`** or **`TF_K8S_PLATFORM_STATE_KEY`** as repository variables, you can delete them—workflows no longer read those.
+
+**Local applies:** use the same pattern in `backend.hcl` / `-backend-config` / `-var foundation_state_key=…` (see `infra/aws/examples/`).
+
+Optional convenience (not read by workflows today):
 
 | Name | Example | Notes |
 |------|---------|-------|
@@ -34,21 +47,26 @@ The **GitHub OIDC IAM roles** (`github_actions_terraform_role_arn` and `github_a
 1. From your laptop (administrator or power-user AWS credentials), configure the S3 backend and run **foundation** only:
    ```bash
    cd infra/aws/foundation
-   terraform init -backend-config=../../examples/backend-foundation.hcl  # copy/edit example first
+   terraform init -backend-config=../../examples/backend-foundation.hcl  # copy/edit: key must be <repo>/foundation/terraform.tfstate
    export TF_VAR_aws_region=us-east-1
    export TF_VAR_github_organization=MichaelJ43
    export TF_VAR_github_repository=kubernetes-mono-app
    terraform apply
    ```
 2. Copy **outputs** `github_actions_terraform_role_arn` → **`AWS_ROLE_ARN_TERRAFORM`**, `github_actions_bootstrap_role_arn` → **`AWS_ROLE_ARN_BOOTSTRAP`**.
-3. Set the **Variables** table above to match your bucket/table/keys.
+3. Set the **Variables** `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_LOCK_TABLE` in GitHub to match your backend.
 4. Run **Terraform apply** workflow (`workflow_dispatch`, confirm `APPLY`) to align CI/CD with the same code path, or continue locally for **k8s_platform**:
    ```bash
    cd infra/aws/k8s_platform
    terraform init -backend-config=../../examples/backend-k8s-platform.hcl
-   # set -var for state_* and foundation_state_key to match foundation key
-   terraform apply
+   terraform apply \
+     -var="aws_region=us-east-1" \
+     -var="state_bucket=YOUR_BUCKET" \
+     -var="state_region=us-east-1" \
+     -var="lock_table=YOUR_TABLE" \
+     -var="foundation_state_key=kubernetes-mono-app/foundation/terraform.tfstate"
    ```
+   Use your real repo name in place of `kubernetes-mono-app` if it differs.
 
 ## What is not stored in GitHub or AWS Secrets Manager here
 

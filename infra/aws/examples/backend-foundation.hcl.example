@@ -1,4 +1,7 @@
-# Remote state (S3 + DynamoDB) — copy to `backend.hcl` (not committed) or pass `-backend-config=...`
+# Remote state (S3 + DynamoDB). For GitHub Actions, keys are derived as:
+#   <repo-name>/foundation/terraform.tfstate
+#   <repo-name>/k8s-platform/terraform.tfstate
+# (repo short name = github.event.repository.name). For local apply, set key to match.
 
 bucket         = "YOUR_STATE_BUCKET"
 key            = "kubernetes-mono-app/foundation/terraform.tfstate"
