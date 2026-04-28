@@ -4,5 +4,5 @@ github_organization  = "MichaelJ43"
 github_repository    = "kubernetes-mono-app"
 enable_nat_gateway   = false
 
-# Optional: after ACM issues a cert in aws_region, set to the cert's "Domain name" to expose output acm_certificate_arn:
+# Optional: cert's primary "Domain name" in ACM → terraform output acm_certificate_arn (reference only; Ingress uses ALB discovery).
 # acm_certificate_domain = "*.k8s.michaelj43.dev"
