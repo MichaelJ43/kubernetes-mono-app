@@ -16,7 +16,7 @@ For a first-time bring-up you can set **both secrets to the ARNs output by Terra
 | Name | Example | Purpose |
 |------|---------|---------|
 | **`TF_STATE_BUCKET`** | `my-terraform-state-bucket` | S3 bucket for Terraform state. |
-| **`TF_STATE_REGION`** | `us-east-1` | Region where the **state bucket and DynamoDB table** live (often same as EKS region). |
+| **`TF_STATE_REGION`** | `us-east-1` | Region where the **state bucket and DynamoDB table** live (often same as EKS region). If unset, Terraform workflows default **`us-east-1`** for `aws configure` / backend region so OIDC steps do not fail—set this variable if your bucket is elsewhere.
 | **`TF_LOCK_TABLE`** | `my-terraform-locks` | DynamoDB table for state locking. |
 
 ### S3 state object keys (no variables)

@@ -24,6 +24,8 @@ jobs:
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+      # Fallback when TF_STATE_REGION repo variable is not set yet
+      AWS_REGION: ${{ vars.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +33,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
-          aws-region: ${{ vars.TF_STATE_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -44,7 +46,7 @@ jobs:
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_FOUNDATION }}" \
-            -backend-config="region=${{ vars.TF_STATE_REGION }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
@@ -54,7 +56,7 @@ jobs:
         env:
           TF_VAR_github_organization: ${{ github.repository_owner }}
           TF_VAR_github_repository: ${{ github.event.repository.name }}
-          TF_VAR_aws_region: ${{ vars.TF_STATE_REGION }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
         run: terraform plan -input=false -no-color
 
   # Runs only after foundation has been applied at least once (remote state readable).
@@ -66,6 +68,7 @@ jobs:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
+      AWS_REGION: ${{ vars.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,7 +76,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
-          aws-region: ${{ vars.TF_STATE_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -86,16 +89,16 @@ jobs:
           terraform init -input=false \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_K8S_PLATFORM }}" \
-            -backend-config="region=${{ vars.TF_STATE_REGION }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: Terraform plan (k8s_platform)
         working-directory: infra/aws/k8s_platform
         env:
-          TF_VAR_aws_region: ${{ vars.TF_STATE_REGION }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
-          TF_VAR_state_region: ${{ vars.TF_STATE_REGION }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ vars.TF_LOCK_TABLE }}
           TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
         run: terraform plan -input=false -no-color
