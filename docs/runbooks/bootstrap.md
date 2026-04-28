@@ -1,5 +1,7 @@
 # Runbook: Bootstrap
 
+**End-to-end order (Terraform → DNS → Argo):** [`../post-merge-runbook.md`](../post-merge-runbook.md).
+
 ## 0. Terraform (VPC + EKS + LB controller + GitHub OIDC roles)
 
 Use **Terraform** for the **Kubernetes platform** the cluster runs on. Argo CD does **not** create EKS.

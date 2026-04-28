@@ -16,7 +16,8 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 | `infra/aws/foundation` | Terraform: VPC, EKS, addons, GitHub OIDC roles, IRSA for LB controller |
 | `infra/aws/k8s_platform` | Terraform: Helm `aws-load-balancer-controller` |
 | `deploy/gitops` | Root `Application` + app-of-apps children |
-| `deploy/base/api` | API Deployment/Service/Ingress Kustomize |
+| `deploy/base/api` | API Deployment/Service/Ingress base Kustomize |
+| `deploy/overlays/aws-prod` | Prod overlay (ACM Ingress patch); **Argo `api` app** syncs this path |
 | `deploy/base/postgres` | CloudNativePG `Cluster` + namespace |
 | `deploy/helm/redis-values.yaml` | Reference values (Helm is inlined in Argo app for simplicity) |
 | `infra/argocd` | Helm values for **bootstrap** only |
@@ -26,7 +27,7 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 ## Conventions
 
 - Go **module**: `github.com/michaelj43/kubernetes-mono-app/apps/api` — if the GitHub org/user changes, update `go.mod` **import paths** and all imports consistently.
-- **Ingress** targets `api.k8s.michaelj43.dev` and ACM **must** be in the same region as the ALB (`docs/aws-domain-tls.md`).
+- **`docs/post-merge-runbook.md`**: ordered bring-up after infra is on `main` (Terraform → TLS → Argo).
 - **Postgres**: operator first (`cnpg-operator` app), then `Cluster` CR; API expects Secret `portfolio-db-app` key **`uri`** (CloudNativePG application secret). If keys differ in your CNPG version, adjust `deploy/base/api/deployment.yaml` and document.
 - After the **first** push to `main`, use **feature branches** for subsequent work; only the initial bootstrap used `main` as requested by the repo owner.
 
