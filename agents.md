@@ -17,11 +17,13 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 | `infra/aws/k8s_platform` | Terraform: Helm `aws-load-balancer-controller` |
 | `deploy/gitops` | Root `Application` + app-of-apps children |
 | `deploy/base/api` | API Deployment/Service/Ingress Kustomize |
+| `deploy/overlays/aws-prod` | Prod overlay (ACM Ingress patch); Argo **api** app syncs this path |
 | `deploy/base/postgres` | CloudNativePG `Cluster` + namespace |
 | `deploy/helm/redis-values.yaml` | Reference values (Helm is inlined in Argo app for simplicity) |
 | `infra/argocd` | Helm values for **bootstrap** only |
 | `tests/component` | `docker-compose` integration |
 | `docs/` | Architecture, TLS, GitOps, testing, runbooks |
+| `scripts/` | e.g. `render-ingress-acm-patch.sh` — ACM ARN → Kustomize patch for Argo |
 
 ## Conventions
 

@@ -29,9 +29,21 @@ The single-label wildcard covers hostnames like `api.k8s.michaelj43.dev` but **n
    - `alb.ingress.kubernetes.io/target-type: ip`
 3. In **Route 53**, create an **alias** (or CNAME) record `api.k8s.michaelj43.dev` → the ALB DNS name emitted by the controller.
 
-**Kustomize:** replace `REPLACE_ACM_CERTIFICATE_ARN` in `deploy/base/api/ingress.yaml`, or use `deploy/overlays/aws-prod/` and edit `ingress-acm-patch.yaml`.
+**Kustomize / Argo:** the **`api`** Argo app should sync **`deploy/overlays/aws-prod`**, which patches **`deploy/base/api`**. Set the ACM ARN in **`deploy/overlays/aws-prod/ingress-acm-patch.yaml`**.
 
-## 4. Troubleshooting
+For **ad-hoc** apply without the overlay, you can set `REPLACE_ACM_CERTIFICATE_ARN` in `deploy/base/api/ingress.yaml` instead.
+
+## 4. Programmatic ARN (Terraform + script)
+
+**Argo CD reads manifests from Git**, not from GitHub Secrets—there is no built-in way to “inject” an ACM ARN from a repository secret into an Ingress annotation during sync. Typical patterns:
+
+| Approach | Notes |
+|----------|--------|
+| **Terraform output** | In `infra/aws/foundation`, set optional variable **`acm_certificate_domain`** to your cert’s **Domain name** in ACM (e.g. `*.k8s.michaelj43.dev`), same region as `aws_region`. After `terraform apply`, run **`terraform output acm_certificate_arn`**. |
+| **Helper script** | From repo root: **`./scripts/render-ingress-acm-patch.sh`** reads that output (or **`ACM_CERTIFICATE_ARN`**, or **`--from-aws REGION DOMAIN`** with AWS CLI + `jq`) and writes `deploy/overlays/aws-prod/ingress-acm-patch.yaml`. Commit and push so Argo picks it up. |
+| **GitHub Actions (advanced)** | A workflow could assume OIDC, call `aws acm list-certificates`, and open a PR that updates the patch file (not included by default). |
+
+## 5. Troubleshooting
 
 | Symptom | Check |
 |---------|--------|

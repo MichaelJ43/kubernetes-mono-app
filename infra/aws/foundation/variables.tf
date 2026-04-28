@@ -37,6 +37,17 @@ variable "github_repository" {
   description = "Repository name without org prefix."
 }
 
+variable "acm_certificate_domain" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = <<-EOT
+    Optional. Primary domain name of an ISSUED ACM certificate in var.aws_region (same region as ALB).
+    Example: "*.k8s.example.dev" or "api.k8s.example.dev". Must match the name shown in ACM.
+    When set, Terraform exposes output acm_certificate_arn for scripts (see scripts/render-ingress-acm-patch.sh).
+  EOT
+}
+
 variable "node_instance_types" {
   type    = list(string)
   default = ["t3.small"]

@@ -31,7 +31,7 @@ flowchart LR
 
 1. **`repoURL` in `deploy/gitops/**/*.yaml`** — defaults to `https://github.com/michaelj43/kubernetes-mono-app.git`.
 2. **Container image** — `deploy/base/api` uses `ghcr.io/michaelj43/kubernetes-mono-app/api:latest`; CI publishes `ghcr.io/<github-owner>/kubernetes-mono-app/api` on `main`.
-3. **Ingress TLS** — set `alb.ingress.kubernetes.io/certificate-arn` (see `docs/aws-domain-tls.md`).
+3. **Ingress TLS** — set `alb.ingress.kubernetes.io/certificate-arn` in **`deploy/overlays/aws-prod/ingress-acm-patch.yaml`**, or use **`./scripts/render-ingress-acm-patch.sh`** with Terraform output / AWS CLI (see **`docs/aws-domain-tls.md`**).
 
 ## Quick start (local)
 

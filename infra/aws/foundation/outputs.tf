@@ -32,6 +32,11 @@ output "aws_load_balancer_controller_irsa_role_arn" {
   value       = module.lb_controller_irsa.iam_role_arn
 }
 
+output "acm_certificate_arn" {
+  description = "ACM ARN when acm_certificate_domain is set; otherwise null. Use scripts/render-ingress-acm-patch.sh to write deploy/overlays/aws-prod/ingress-acm-patch.yaml."
+  value       = length(data.aws_acm_certificate.ingress) > 0 ? data.aws_acm_certificate.ingress[0].arn : null
+}
+
 output "vpc_id" {
   value = module.vpc.vpc_id
 }
