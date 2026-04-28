@@ -12,7 +12,7 @@ Internet → Route 53 (k8s.michaelj43.dev) → ALB (TLS via ACM)
 
 Git is the **source of truth** for the workload: Argo CD reads `deploy/gitops/` and applies child `Application` objects, which in turn sync Helm/Kustomize paths in this mono-repo.
 
-GitHub Actions builds and publishes the **container image** (`ci.yaml` on `main`). Argo CD deploys that image tag via Kustomize (`deploy/base/api`).
+GitHub Actions builds and publishes the **container image** (`ci.yaml` on `main`). Argo CD deploys that image tag via Kustomize (**`deploy/overlays/aws-prod`**, which includes **`deploy/base/api`**).
 
 ## Failure domains
 

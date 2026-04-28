@@ -29,7 +29,7 @@ The single-label wildcard covers hostnames like `api.k8s.michaelj43.dev` but **n
    - `alb.ingress.kubernetes.io/target-type: ip`
 3. In **Route 53**, create an **alias** (or CNAME) record `api.k8s.michaelj43.dev` → the ALB DNS name emitted by the controller.
 
-**Kustomize:** replace `REPLACE_ACM_CERTIFICATE_ARN` in `deploy/base/api/ingress.yaml`, or use `deploy/overlays/aws-prod/` and edit `ingress-acm-patch.yaml`.
+**Kustomize / Argo:** the **`api`** Argo app syncs **`deploy/overlays/aws-prod`**; set your ACM ARN in **`deploy/overlays/aws-prod/ingress-acm-patch.yaml`**. (For ad-hoc `kubectl` without the overlay, you can instead edit `REPLACE_ACM_CERTIFICATE_ARN` in `deploy/base/api/ingress.yaml`.)
 
 ## 4. Troubleshooting
 

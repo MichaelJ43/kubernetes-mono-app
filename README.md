@@ -30,8 +30,12 @@ flowchart LR
 ## Replace placeholders
 
 1. **`repoURL` in `deploy/gitops/**/*.yaml`** — defaults to `https://github.com/michaelj43/kubernetes-mono-app.git`.
-2. **Container image** — `deploy/base/api` uses `ghcr.io/michaelj43/kubernetes-mono-app/api:latest`; CI publishes `ghcr.io/<github-owner>/kubernetes-mono-app/api` on `main`.
-3. **Ingress TLS** — set `alb.ingress.kubernetes.io/certificate-arn` (see `docs/aws-domain-tls.md`).
+2. **Container image** — Kustomize uses `ghcr.io/michaelj43/kubernetes-mono-app/api:latest`; CI publishes `ghcr.io/<lowercase-github-owner>/kubernetes-mono-app/api` on `main`.
+3. **Ingress TLS** — Argo syncs **`deploy/overlays/aws-prod`**: edit **`deploy/overlays/aws-prod/ingress-acm-patch.yaml`** with your ACM ARN (see [`docs/aws-domain-tls.md`](docs/aws-domain-tls.md)).
+
+## First full deploy (AWS + Argo)
+
+After infra code is on `main`, follow **[`docs/post-merge-runbook.md`](docs/post-merge-runbook.md)** in order (Terraform → ACM / DNS → image on GHCR → Argo bootstrap → Route 53 alias).
 
 ## Quick start (local)
 
@@ -42,7 +46,8 @@ cd ../../tests/component && docker compose -f docker-compose.yaml up --build
 
 ## Docs
 
-- [`docs/github-actions.md`](docs/github-actions.md) — **Secrets & Variables** for Terraform + Argo workflows
+- [`docs/post-merge-runbook.md`](docs/post-merge-runbook.md) — **ordered bring-up** after merge
+- [`docs/github-actions.md`](docs/github-actions.md) — **Secrets** for Terraform + Argo workflows
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/aws-domain-tls.md`](docs/aws-domain-tls.md)
 - [`docs/gitops.md`](docs/gitops.md)

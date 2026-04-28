@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/michaelj43/kubernetes-mono-app.git
     targetRevision: main
-    path: deploy/base/api
+    path: deploy/overlays/aws-prod
   destination:
     server: https://kubernetes.default.svc
     namespace: portfolio
