@@ -3,7 +3,7 @@ name: Terraform apply
 # Applies foundation then k8s_platform (Helm: AWS Load Balancer Controller).
 # Requires: S3 bucket + DynamoDB lock (TF_STATE_BUCKET, TF_STATE_REGION, TF_LOCK_TABLE);
 #           state keys are <repo>/foundation/... and <repo>/k8s-platform/... from github.event.repository.name.
-#           IAM role in secret AWS_ROLE_ARN_TERRAFORM (usually created on first local foundation apply).
+#           IAM role in secret AWS_DEPLOY_ROLE_ARN (same secret as Argo bootstrap/teardown).
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3

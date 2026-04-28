@@ -1,6 +1,6 @@
 name: Terraform plan
 
-# Optional AWS plan on PR (same-repo only; needs AWS_ROLE_ARN_TERRAFORM + IAM trust for PRs).
+# Optional AWS plan on PR (same-repo only; needs AWS_DEPLOY_ROLE_ARN + IAM trust for PRs).
 # Always runs fmt/validate without credentials.
 
 on:
@@ -54,17 +54,17 @@ jobs:
 
       - name: Require Terraform OIDC role secret
         env:
-          ARN: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: |
           if [ -z "$ARN" ]; then
-            echo "::error::Repository secret AWS_ROLE_ARN_TERRAFORM is not set. After infra/aws/foundation apply, set it to output github_actions_terraform_role_arn (docs/github-actions.md)."
+            echo "::error::Repository secret AWS_DEPLOY_ROLE_ARN is not set. After infra/aws/foundation apply, set it to output github_actions_terraform_role_arn (docs/github-actions.md)."
             exit 1
           fi
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
@@ -106,17 +106,17 @@ jobs:
 
       - name: Require Terraform OIDC role secret
         env:
-          ARN: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: |
           if [ -z "$ARN" ]; then
-            echo "::error::AWS_ROLE_ARN_TERRAFORM is not set."
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not set."
             exit 1
           fi
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_TERRAFORM }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3

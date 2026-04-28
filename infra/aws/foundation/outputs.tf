@@ -18,12 +18,12 @@ output "configure_kubectl" {
 }
 
 output "github_actions_terraform_role_arn" {
-  description = "GitHub Actions secret AWS_ROLE_ARN_TERRAFORM"
+  description = "Typical value for GitHub Actions secret AWS_DEPLOY_ROLE_ARN (Terraform + Argo workflows)."
   value       = aws_iam_role.github_terraform.arn
 }
 
 output "github_actions_bootstrap_role_arn" {
-  description = "GitHub Actions secret AWS_ROLE_ARN_BOOTSTRAP"
+  description = "Optional narrow GitOps role (if not using a single AWS_DEPLOY_ROLE_ARN)"
   value       = aws_iam_role.github_bootstrap.arn
 }
 

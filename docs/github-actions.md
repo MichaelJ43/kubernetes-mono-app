@@ -6,10 +6,9 @@ Configure these under **Settings → Secrets and variables → Actions** for the
 
 | Name | Required | Used by |
 |------|----------|---------|
-| **`AWS_ROLE_ARN_TERRAFORM`** | Yes (after first foundation apply) | `terraform-plan.yaml`, `terraform-apply.yaml`, `terraform-destroy.yaml` — OIDC assume-role for Terraform (`AdministratorAccess` on the role this repo creates). |
-| **`AWS_ROLE_ARN_BOOTSTRAP`** | Yes (same as Terraform output `github_actions_bootstrap_role_arn`) | `argocd-bootstrap.yaml`, `argocd-teardown.yaml` — narrower AWS API + EKS cluster admin via **EKS access entry** (install Helm / `kubectl`). |
+| **`AWS_DEPLOY_ROLE_ARN`** | Yes (after the deploy role exists in IAM) | **All** AWS OIDC workflows: `terraform-plan.yaml`, `terraform-apply.yaml`, `terraform-destroy.yaml`, `argocd-bootstrap.yaml`, `argocd-teardown.yaml`. Set to the ARN of **one** IAM role that can run Terraform and EKS bootstrap/teardown (e.g. foundation output `github_actions_terraform_role_arn`, or your own equivalent role). |
 
-For a first-time bring-up you can set **both secrets to the ARNs output by Terraform** after your **first local** `terraform apply` (see below). They are **different IAM roles** in this design.
+Foundation also outputs `github_actions_bootstrap_role_arn` (narrower GitOps-only role). You can ignore it if you use a single full-permission deploy role as above.
 
 ## Variables (`Settings → Secrets and variables → Actions → Variables`)
 
@@ -42,7 +41,7 @@ Optional convenience (not read by workflows today):
 
 ## First-time chicken-and-egg
 
-The **GitHub OIDC IAM roles** (`github_actions_terraform_role_arn` and `github_actions_bootstrap_role_arn`) are **created by the foundation stack**. Until they exist, GitHub Actions cannot assume them.
+The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and optionally `github_actions_bootstrap_role_arn`) are **created by the foundation stack**. Until your chosen deploy role exists, GitHub Actions cannot assume **`AWS_DEPLOY_ROLE_ARN`**.
 
 1. From your laptop (administrator or power-user AWS credentials), configure the S3 backend and run **foundation** only:
    ```bash
@@ -53,7 +52,7 @@ The **GitHub OIDC IAM roles** (`github_actions_terraform_role_arn` and `github_a
    export TF_VAR_github_repository=kubernetes-mono-app
    terraform apply
    ```
-2. Copy **outputs** `github_actions_terraform_role_arn` → **`AWS_ROLE_ARN_TERRAFORM`**, `github_actions_bootstrap_role_arn` → **`AWS_ROLE_ARN_BOOTSTRAP`**.
+2. Copy the ARN of your **deploy role** into **`AWS_DEPLOY_ROLE_ARN`** (e.g. output `github_actions_terraform_role_arn` if that role has permissions for Terraform and cluster bootstrap).
 3. Set the **Variables** `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_LOCK_TABLE` in GitHub to match your backend.
 4. Run **Terraform apply** workflow (`workflow_dispatch`, confirm `APPLY`) to align CI/CD with the same code path, or continue locally for **k8s_platform**:
    ```bash
@@ -80,7 +79,7 @@ The **GitHub OIDC IAM roles** (`github_actions_terraform_role_arn` and `github_a
 
 ## Troubleshooting: Terraform plan + OIDC (“Could not load credentials”)
 
-1. **`AWS_ROLE_ARN_TERRAFORM` empty** — The workflow now fails fast with a clear error. Set the secret to Terraform output `github_actions_terraform_role_arn`.
+1. **`AWS_DEPLOY_ROLE_ARN` empty** — Terraform plan fails fast with a clear error. Set the secret to your deploy role ARN (commonly output `github_actions_terraform_role_arn`). Argo workflows need the same secret.
 
 2. **IAM trust `sub` mismatch** — The role must trust GitHub’s OIDC subject for **pull requests**, e.g. `repo:YOUR_ORG/YOUR_REPO:pull_request` (and branch pushes). This repo’s Terraform allows `repo:<org>/<repo>:*` plus **lowercase org/repo** variants so `MichaelJ43` vs `michaelj43` does not break STS. After changing `iam_github_oidc.tf`, run **`terraform apply`** on **foundation** and wait for IAM to update.
 
