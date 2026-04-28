@@ -24,6 +24,7 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
    terraform init -backend-config=backend.hcl
    terraform apply
    ```
+   Optional: set **`acm_certificate_domain`** in `terraform.tfvars` if you want **`terraform output acm_certificate_arn`** for your own records (not required for Argo—Ingress uses ALB **certificate discovery**; see [`../docs/aws-domain-tls.md`](../docs/aws-domain-tls.md)).
 4. Set GitHub **Secrets**: `AWS_DEPLOY_ROLE_ARN` (deploy role, usually `github_actions_terraform_role_arn`); `TF_STATE_BUCKET`, `TF_LOCK_TABLE`, and optionally `TF_STATE_REGION` — see [`../docs/github-actions.md`](../docs/github-actions.md). Optional narrow role `github_actions_bootstrap_role_arn` exists if you split IAM roles.
 5. From `infra/aws/k8s_platform`, use a second key **`<repo>/k8s-platform/terraform.tfstate`** (same repo short name as in step 1) **or** pass backend flags and:
    ```bash

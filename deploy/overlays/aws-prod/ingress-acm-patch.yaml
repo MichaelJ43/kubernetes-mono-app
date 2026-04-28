@@ -1,8 +1,0 @@
-# Set certificate-arn to your issued ACM cert (same region as ALB). See docs/aws-domain-tls.md.
-# Argo Application deploy/gitops/apps/api.yaml uses this overlay.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: api
-  annotations:
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/REPLACE_ME

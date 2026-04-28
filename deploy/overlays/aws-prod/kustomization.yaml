@@ -1,4 +1,5 @@
-# Optional overlay: patch ACM ARN and other prod-only settings.
+# Optional overlay for prod-only Kustomize patches (e.g. extra labels).
+# Default Ingress in base/api uses ALB certificate discovery — no ACM ARN in Git.
 #
 #   kubectl kustomize deploy/overlays/aws-prod | kubectl apply -f -
 
@@ -8,6 +9,3 @@ namespace: portfolio
 
 resources:
   - ../../base/api
-
-patches:
-  - path: ingress-acm-patch.yaml

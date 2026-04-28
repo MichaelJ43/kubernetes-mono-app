@@ -45,11 +45,11 @@ Or the same **Terraform apply** workflow (runs foundation then k8s_platform).
 
 Follow **[`aws-domain-tls.md`](aws-domain-tls.md)** (hosted zone, ACM in **ALB region**, validation records).
 
-## 4. Ingress: set ACM ARN in Git
+## 4. Ingress TLS (nothing secret in Git)
 
-The Argo **API** app uses **`deploy/overlays/aws-prod`**, so you only patch **`deploy/overlays/aws-prod/ingress-acm-patch.yaml`**: set `alb.ingress.kubernetes.io/certificate-arn` to your real ACM certificate ARN (same region as the cluster / ALB).
+The default **Ingress** uses **ALB certificate discovery**: ensure an **ISSUED** ACM cert in the cluster region covers **`api.k8s.michaelj43.dev`** (see step 3 and [`aws-domain-tls.md`](aws-domain-tls.md)). Argo syncs **`deploy/base/api`**—no ACM ARN is committed.
 
-Commit to `main` (or merge a PR) **before** or **after** Argo bootstrap; Argo will sync the change.
+If you change the hostname, edit **`deploy/base/api/ingress.yaml`** (`spec.tls.hosts` and `rules[].host`) and push.
 
 ## 5. Image on GHCR
 

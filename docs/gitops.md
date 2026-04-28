@@ -7,7 +7,7 @@ Argo CD is the **continuous reconciler** for everything under the application st
 - CloudNativePG **operator** (`deploy/gitops/apps/cnpg-operator.yaml`)
 - **Postgres cluster** CR (`deploy/base/postgres`)
 - **Redis** (Bitnami Helm via `deploy/gitops/apps/redis.yaml`)
-- **API** Deployment / Service / `Ingress` (**`deploy/overlays/aws-prod`** Kustomize → base under `deploy/base/api`)
+- **API** Deployment / Service / `Ingress` (`deploy/base/api`; ALB **certificate discovery** for TLS—see `docs/aws-domain-tls.md`)
 
 Bootstrap-time installs (`infra/argocd/`) are **not** auto-synced from this repo unless you choose to manage Argo itself via Argo—that is intentionally out of scope for the first pass.
 
