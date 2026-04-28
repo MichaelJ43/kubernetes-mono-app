@@ -1,7 +1,7 @@
 name: Terraform apply
 
 # Applies foundation then k8s_platform (Helm: AWS Load Balancer Controller).
-# Requires: S3 bucket + DynamoDB lock (TF_STATE_BUCKET, TF_STATE_REGION, TF_LOCK_TABLE);
+# Requires: S3 bucket + DynamoDB lock (secrets TF_STATE_BUCKET, TF_LOCK_TABLE; optional TF_STATE_REGION);
 #           state keys are <repo>/foundation/... and <repo>/k8s-platform/... from github.event.repository.name.
 #           IAM role in secret AWS_DEPLOY_ROLE_ARN (same secret as Argo bootstrap/teardown).
 
@@ -29,15 +29,15 @@ jobs:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
-      AWS_REGION: ${{ vars.TF_STATE_REGION || 'us-east-1' }}
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Require AWS deploy role and Terraform backend variables
         env:
           ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          BUCKET: ${{ vars.TF_STATE_BUCKET }}
-          LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
         run: |
           err=0
           if [ -z "$ARN" ]; then echo "::error::AWS_DEPLOY_ROLE_ARN is not set."; err=1; fi
@@ -64,10 +64,10 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
         run: |
           terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_FOUNDATION }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
           terraform apply -input=false -auto-approve
 
@@ -75,15 +75,15 @@ jobs:
         working-directory: infra/aws/k8s_platform
         env:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
-          TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ env.AWS_REGION }}
-          TF_VAR_lock_table: ${{ vars.TF_LOCK_TABLE }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
           TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
         run: |
           terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_K8S_PLATFORM }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
           terraform apply -input=false -auto-approve

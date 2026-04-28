@@ -7,8 +7,7 @@ Use **Terraform** for the **Kubernetes platform** the cluster runs on. Argo CD d
 See **[`infra/aws/README.md`](../../infra/aws/README.md)** and **[`docs/github-actions.md`](../../docs/github-actions.md)** for:
 
 - S3 + DynamoDB state/lock
-- **Secrets**: `AWS_DEPLOY_ROLE_ARN` (Terraform + Argo bootstrap/teardown)
-- **Variables**: `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_LOCK_TABLE` (state S3 keys are derived as `<repo>/foundation/...` and `<repo>/k8s-platform/...` in Actions—see `docs/github-actions.md`)
+- **Secrets**: `AWS_DEPLOY_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_LOCK_TABLE` (optional `TF_STATE_REGION`)
 
 **Order:** `foundation` apply → `k8s_platform` apply (or use **Terraform apply** workflow after GitHub secrets exist).
 
@@ -19,6 +18,7 @@ See **[`infra/aws/README.md`](../../infra/aws/README.md)** and **[`docs/github-a
 After Terraform foundation apply, set:
 
 - **`AWS_DEPLOY_ROLE_ARN`** → your single deploy role (often `github_actions_terraform_role_arn` from foundation)
+- **`TF_STATE_BUCKET`**, **`TF_LOCK_TABLE`**, optionally **`TF_STATE_REGION`** → match your S3/DynamoDB backend (see `docs/github-actions.md`)
 
 ## 2. Install Argo CD
 

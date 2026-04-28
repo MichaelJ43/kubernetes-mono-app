@@ -1,6 +1,6 @@
 name: Terraform plan
 
-# Optional AWS plan on PR (same-repo only; needs AWS_DEPLOY_ROLE_ARN, TF_STATE_BUCKET, TF_LOCK_TABLE + IAM trust for PRs).
+# Optional AWS plan on PR (same-repo only; needs AWS_DEPLOY_ROLE_ARN, secrets TF_STATE_BUCKET, TF_LOCK_TABLE + IAM trust for PRs).
 # Always runs fmt/validate without credentials.
 
 on:
@@ -48,15 +48,15 @@ jobs:
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
-      AWS_REGION: ${{ vars.TF_STATE_REGION || 'us-east-1' }}
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Require AWS deploy role and Terraform backend variables
         env:
           ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          BUCKET: ${{ vars.TF_STATE_BUCKET }}
-          LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
         run: |
           err=0
           if [ -z "$ARN" ]; then
@@ -64,15 +64,15 @@ jobs:
             err=1
           fi
           if [ -z "${BUCKET}" ]; then
-            echo "::error::Repository variable TF_STATE_BUCKET is not set (Settings → Secrets and variables → Actions → Variables)."
+            echo "::error::Repository secret TF_STATE_BUCKET is not set (Settings → Secrets and variables → Actions → Secrets)."
             err=1
           fi
           if [ -z "${LOCK_TABLE}" ]; then
-            echo "::error::Repository variable TF_LOCK_TABLE is not set."
+            echo "::error::Repository secret TF_LOCK_TABLE is not set."
             err=1
           fi
           if [ "$err" -ne 0 ]; then
-            echo "::error::Terraform S3 backend requires non-empty TF_STATE_BUCKET and TF_LOCK_TABLE. See docs/github-actions.md."
+            echo "::error::Terraform S3 backend requires secrets TF_STATE_BUCKET and TF_LOCK_TABLE. See docs/github-actions.md."
             exit 1
           fi
 
@@ -91,10 +91,10 @@ jobs:
         working-directory: infra/aws/foundation
         run: |
           terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_FOUNDATION }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: Terraform plan (foundation)
@@ -115,15 +115,15 @@ jobs:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
-      AWS_REGION: ${{ vars.TF_STATE_REGION || 'us-east-1' }}
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Require AWS deploy role and Terraform backend variables
         env:
           ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          BUCKET: ${{ vars.TF_STATE_BUCKET }}
-          LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK_TABLE: ${{ secrets.TF_LOCK_TABLE }}
         run: |
           err=0
           if [ -z "$ARN" ]; then echo "::error::AWS_DEPLOY_ROLE_ARN is not set."; err=1; fi
@@ -146,18 +146,18 @@ jobs:
         working-directory: infra/aws/k8s_platform
         run: |
           terraform init -input=false \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_K8S_PLATFORM }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: Terraform plan (k8s_platform)
         working-directory: infra/aws/k8s_platform
         env:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
-          TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ env.AWS_REGION }}
-          TF_VAR_lock_table: ${{ vars.TF_LOCK_TABLE }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
           TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
         run: terraform plan -input=false -no-color

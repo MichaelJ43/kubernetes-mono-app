@@ -7,16 +7,15 @@ Configure these under **Settings → Secrets and variables → Actions** for the
 | Name | Required | Used by |
 |------|----------|---------|
 | **`AWS_DEPLOY_ROLE_ARN`** | Yes (after the deploy role exists in IAM) | **All** AWS OIDC workflows: `terraform-plan.yaml`, `terraform-apply.yaml`, `terraform-destroy.yaml`, `argocd-bootstrap.yaml`, `argocd-teardown.yaml`. Set to the ARN of **one** IAM role that can run Terraform and EKS bootstrap/teardown (e.g. foundation output `github_actions_terraform_role_arn`, or your own equivalent role). |
+| **`TF_STATE_BUCKET`** | Yes | Terraform workflows — S3 bucket for remote state (backend `bucket`). |
+| **`TF_LOCK_TABLE`** | Yes | Terraform workflows — DynamoDB table for state locking (`dynamodb_table`). |
+| **`TF_STATE_REGION`** | No | Region where the **state bucket and lock table** live; if unset, workflows default **`us-east-1`** for backend region and `aws configure`. |
 
 Foundation also outputs `github_actions_bootstrap_role_arn` (narrower GitOps-only role). You can ignore it if you use a single full-permission deploy role as above.
 
 ## Variables (`Settings → Secrets and variables → Actions → Variables`)
 
-| Name | Example | Purpose |
-|------|---------|---------|
-| **`TF_STATE_BUCKET`** | `my-terraform-state-bucket` | S3 bucket for Terraform state. |
-| **`TF_STATE_REGION`** | `us-east-1` | Region where the **state bucket and DynamoDB table** live (often same as EKS region). If unset, Terraform workflows default **`us-east-1`** for `aws configure` / backend region so OIDC steps do not fail—set this variable if your bucket is elsewhere.
-| **`TF_LOCK_TABLE`** | `my-terraform-locks` | DynamoDB table for state locking. |
+Repository **variables** are optional for this repo’s workflows. Terraform reads state backend settings from **secrets** above.
 
 ### S3 state object keys (no variables)
 
@@ -53,7 +52,7 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
    terraform apply
    ```
 2. Copy the ARN of your **deploy role** into **`AWS_DEPLOY_ROLE_ARN`** (e.g. output `github_actions_terraform_role_arn` if that role has permissions for Terraform and cluster bootstrap).
-3. Set the **Variables** `TF_STATE_BUCKET`, `TF_STATE_REGION`, `TF_LOCK_TABLE` in GitHub to match your backend.
+3. Set **Secrets** `TF_STATE_BUCKET`, `TF_LOCK_TABLE`, and optionally `TF_STATE_REGION` in GitHub to match your backend.
 4. Run **Terraform apply** workflow (`workflow_dispatch`, confirm `APPLY`) to align CI/CD with the same code path, or continue locally for **k8s_platform**:
    ```bash
    cd infra/aws/k8s_platform
@@ -87,4 +86,4 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 
 4. **Repo Settings → Actions → General** — Workflow permissions must allow **read** (and **OIDC** is standard for GHA). Ensure Actions are enabled for the repository.
 
-5. **Backend variables** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Variables**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows now fail earlier with an explicit error.
+5. **Backend secrets** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Secrets**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows fail earlier with an explicit error.
