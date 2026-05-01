@@ -87,10 +87,12 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 
 2. **IAM trust `sub` mismatch** — The role must trust GitHub’s OIDC subject for **pull requests**, e.g. `repo:YOUR_ORG/YOUR_REPO:pull_request` (and branch pushes). This repo’s Terraform allows `repo:<org>/<repo>:*` plus **lowercase org/repo** variants so `MichaelJ43` vs `michaelj43` does not break STS. After changing `iam_github_oidc.tf`, run **`terraform apply`** on **foundation** and wait for IAM to update.
 
-3. **Fork PRs** — Secrets are not available on workflows triggered from forks. The **plan** jobs only run when `pull_request.head.repo.fork == false`. **fmt/validate** still runs.
+3. **GitHub OIDC provider already exists (409)** — AWS allows **one** IAM OIDC provider per account for `https://token.actions.githubusercontent.com`. Foundation defaults to **`create_github_oidc_provider = false`** so Terraform **reuses** an existing provider. If this is a **new** account with no such provider yet, set `create_github_oidc_provider = true` in `terraform.tfvars` (or `TF_VAR_create_github_oidc_provider=true` once).
 
-4. **Repo Settings → Actions → General** — Workflow permissions must allow **read** (and **OIDC** is standard for GHA). Ensure Actions are enabled for the repository.
+4. **Fork PRs** — Secrets are not available on workflows triggered from forks. The **plan** jobs only run when `pull_request.head.repo.fork == false`. **fmt/validate** still runs.
 
-5. **Backend secrets** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Secrets**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows fail earlier with an explicit error.
+5. **Repo Settings → Actions → General** — Workflow permissions must allow **read** (and **OIDC** is standard for GHA). Ensure Actions are enabled for the repository.
 
-6. **k8s_platform plan skipped or “Unable to find remote state”** — The **k8s_platform** stack reads `terraform_remote_state` for **foundation**. Until the foundation state object exists in your S3 backend (after the first **foundation** `terraform apply`), PR **Terraform plan** only runs the **foundation** plan; **k8s_platform** is skipped with a workflow notice so the PR check stays green.
+6. **Backend secrets** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Secrets**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows fail earlier with an explicit error.
+
+7. **k8s_platform plan skipped or “Unable to find remote state”** — The **k8s_platform** stack reads `terraform_remote_state` for **foundation**. Until the foundation state object exists in your S3 backend (after the first **foundation** `terraform apply`), PR **Terraform plan** only runs the **foundation** plan; **k8s_platform** is skipped with a workflow notice so the PR check stays green.

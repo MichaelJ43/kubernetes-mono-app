@@ -4,7 +4,7 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
 
 | Stack | Path | What it creates |
 |-------|------|------------------|
-| **foundation** | `infra/aws/foundation` | VPC, EKS 1.29, managed nodes, `aws-ebs-csi-driver` addon, GitHub OIDC IAM roles (Terraform + bootstrap), IRSA role for AWS LB Controller, EKS access entries for both GitHub roles. |
+| **foundation** | `infra/aws/foundation` | VPC, EKS (see `cluster_version` default in `variables.tf`), managed nodes, `aws-ebs-csi-driver` addon, GitHub OIDC IAM roles (Terraform + bootstrap), IRSA role for AWS LB Controller, EKS access entries for both GitHub roles. |
 | **k8s_platform** | `infra/aws/k8s_platform` | **Helm**: `aws-load-balancer-controller` into `kube-system` (uses IRSA ARN from foundation remote state). |
 
 **Argo CD** (install + app manifests) stays **inside the cluster** after bootstrap — Terraform does not install Argo.

@@ -11,8 +11,18 @@ variable "cluster_name" {
 
 variable "cluster_version" {
   type        = string
-  default     = "1.29"
+  default     = "1.31"
   description = "EKS control plane version."
+}
+
+variable "create_github_oidc_provider" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    If true, Terraform creates the IAM OIDC provider for https://token.actions.githubusercontent.com.
+    AWS allows only one per account. Set true on the first apply in a new account that has no GitHub OIDC provider yet.
+    If you already use GitHub Actions OIDC in this account (common), leave false so Terraform reuses the existing provider.
+  EOT
 }
 
 variable "vpc_cidr" {
