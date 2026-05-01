@@ -7,9 +7,6 @@
 # lock_table        = "your-tf-lock-table"
 # foundation_state_key = "kubernetes-mono-app/foundation/terraform.tfstate"
 
-# Route 53 public hosted zone ID for k8s.example.dev (ExternalDNS + IRSA + Terraform api.<zone> alias after ALB exists). In GitHub Actions: TF_ROUTE53_HOSTED_ZONE_ID.
+# Route 53 public hosted zone ID for k8s.example.dev (ExternalDNS + IRSA).
+# In GitHub Actions this is secret TF_ROUTE53_HOSTED_ZONE_ID.
 # external_dns_route53_zone_id = "Z0123456789ABCDEFGHIJ"
-
-# Optional: only if your API Ingress is not portfolio/api (defaults match deploy/base/api).
-# api_ingress_namespace = "portfolio"
-# api_ingress_name      = "api"
