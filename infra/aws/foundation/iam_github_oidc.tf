@@ -1,5 +1,31 @@
+# GitHub Actions: one IAM OIDC provider per AWS account URL (token.actions.githubusercontent.com).
+# Default is reuse (create_github_oidc_provider=false); set true only on a greenfield account.
+
 data "tls_certificate" "github" {
-  url = "https://token.actions.githubusercontent.com"
+  count = var.create_github_oidc_provider ? 1 : 0
+  url   = "https://token.actions.githubusercontent.com"
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  count = var.create_github_oidc_provider ? 1 : 0
+  url   = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com",
+  ]
+
+  thumbprint_list = [
+    data.tls_certificate.github[0].certificates[0].sha1_fingerprint,
+  ]
+
+  tags = {
+    Name = "github-actions-oidc"
+  }
+}
+
+data "aws_iam_openid_connect_provider" "github_existing" {
+  count = var.create_github_oidc_provider ? 0 : 1
+  url   = "https://token.actions.githubusercontent.com"
 }
 
 locals {
@@ -11,22 +37,8 @@ locals {
     "repo:${var.github_organization}/${lower(var.github_repository)}:*",
     "repo:${lower(var.github_organization)}/${lower(var.github_repository)}:*",
   ])
-}
 
-resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
-
-  client_id_list = [
-    "sts.amazonaws.com",
-  ]
-
-  thumbprint_list = [
-    data.tls_certificate.github.certificates[0].sha1_fingerprint,
-  ]
-
-  tags = {
-    Name = "github-actions-oidc"
-  }
+  github_actions_oidc_provider_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github_existing[0].arn
 }
 
 data "aws_iam_policy_document" "github_actions_trust" {
@@ -37,7 +49,7 @@ data "aws_iam_policy_document" "github_actions_trust" {
     ]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [local.github_actions_oidc_provider_arn]
     }
     condition {
       test     = "StringEquals"
