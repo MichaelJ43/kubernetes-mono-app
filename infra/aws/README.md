@@ -15,6 +15,8 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
 - **S3 bucket** + **DynamoDB table** for Terraform state (you already have these).
 - GitHub repo **Secrets** for Terraform/AWS (see [`../docs/github-actions.md`](../docs/github-actions.md)).
 
+**EKS control plane upgrades:** AWS allows only **one minor version per apply** (for example 1.29 → 1.30, then a later apply 1.30 → 1.31). If apply fails with `Unsupported Kubernetes minor version update`, adjust `cluster_version` in `variables.tf` / `terraform.tfvars` to the next minor only.
+
 ## First apply (local)
 
 1. Copy `examples/backend-foundation.hcl.example` → `backend.hcl` (gitignored path recommended: store outside repo or use `-backend-config` flags).
