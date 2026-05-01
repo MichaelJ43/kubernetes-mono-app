@@ -115,4 +115,4 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 
 8. **Helm / k8s_platform: “Kubernetes cluster unreachable … provide credentials”** — The IAM principal assumed in Actions (`AWS_DEPLOY_ROLE_ARN`) must have an **EKS access entry** on the cluster. Foundation adds one when **`TF_VAR_github_actions_deploy_role_arn`** matches that ARN (workflows set it from the secret). Apply **foundation** after pulling this behavior, then re-run **k8s_platform**.
 
-9. **k8s_platform: missing `oidc_provider_arn` in foundation remote state** — Run **foundation** **`terraform apply`** once after upgrading the repo (adds the output for ExternalDNS IRSA).
+9. **Older errors: missing `oidc_provider_arn` in foundation remote state** — Current **`k8s_platform`** looks up the cluster OIDC provider from AWS directly; if you still see this on an old branch, merge the fix or run **foundation** **`terraform apply`** once so remote state includes that output (legacy).

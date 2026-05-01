@@ -43,6 +43,13 @@ resource "aws_iam_policy" "external_dns" {
   policy = data.aws_iam_policy_document.external_dns[0].json
 }
 
+# EKS IRSA uses the cluster OIDC provider in IAM. Resolve it from the live cluster
+# so PR plans work even when foundation remote state predates output oidc_provider_arn.
+data "aws_iam_openid_connect_provider" "cluster" {
+  count = local.enable_external_dns ? 1 : 0
+  url   = data.aws_eks_cluster.this.identity[0].oidc[0].issuer
+}
+
 module "external_dns_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.44"
@@ -56,7 +63,7 @@ module "external_dns_irsa" {
 
   oidc_providers = {
     main = {
-      provider_arn               = data.terraform_remote_state.foundation.outputs.oidc_provider_arn
+      provider_arn               = data.aws_iam_openid_connect_provider.cluster[0].arn
       namespace_service_accounts = ["kube-system:external-dns"]
     }
   }

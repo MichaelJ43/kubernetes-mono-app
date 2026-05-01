@@ -38,7 +38,7 @@ If your **public hosted zone** for `k8s.michaelj43.dev` lives in **Route 53** (w
 1. Copy the hosted **zone ID** from Route 53 (e.g. `Z0…`).
 2. Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to that ID (or pass `external_dns_route53_zone_id` when applying **`k8s_platform`** locally—see [`infra/aws/examples/k8s_platform/terraform.tfvars.example`](../infra/aws/examples/k8s_platform/terraform.tfvars.example)). **GitHub Actions** maps it to **`TF_VAR_external_dns_route53_zone_id`**.
 3. Run **`terraform apply`** on **`k8s_platform`** (or merge a change under `infra/aws/` so GitHub Actions applies). Terraform installs **[ExternalDNS](https://github.com/kubernetes-sigs/external-dns)** with **IRSA**; it watches **Ingress** resources and creates **alias** records (and ownership TXT records) in that zone for hostnames such as **`api.k8s.michaelj43.dev`** once the AWS Load Balancer Controller has published the ALB address on the Ingress.
-4. **Apply foundation at least once** after updating the repo so remote state includes **`oidc_provider_arn`** (required for the ExternalDNS IRSA role).
+4. **Foundation apply** is only required for VPC/EKS and the usual remote outputs; **k8s_platform** resolves the cluster’s IAM OIDC provider from the live EKS API for ExternalDNS IRSA (it does not depend on the **`oidc_provider_arn`** foundation output).
 
 After Argo has synced the API Ingress, allow a short interval for ExternalDNS to reconcile (chart default loop ~1m).
 
