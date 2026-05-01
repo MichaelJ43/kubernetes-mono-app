@@ -4,6 +4,8 @@ name: Terraform apply
 # Requires: S3 bucket + DynamoDB lock (secrets TF_STATE_BUCKET, TF_LOCK_TABLE; optional TF_STATE_REGION);
 #           state keys are <repo>/foundation/... and <repo>/k8s-platform/... from github.event.repository.name.
 #           IAM role in secret AWS_DEPLOY_ROLE_ARN (same secret as Argo bootstrap/teardown).
+#
+# Runs automatically on push to main only when Terraform / this workflow changes; app deploys stay in GitOps (Argo).
 
 on:
   workflow_dispatch:
@@ -12,6 +14,11 @@ on:
         description: Type APPLY to run
         required: true
         type: string
+  push:
+    branches: [main]
+    paths:
+      - "infra/aws/**"
+      - ".github/workflows/terraform-apply.yaml"
 
 permissions:
   id-token: write
@@ -23,7 +30,9 @@ concurrency:
 
 jobs:
   apply:
-    if: github.event.inputs.confirm == 'APPLY'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'APPLY') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: true

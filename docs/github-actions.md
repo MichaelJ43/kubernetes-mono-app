@@ -13,6 +13,11 @@ Configure these under **Settings → Secrets and variables → Actions** for the
 
 Foundation also outputs `github_actions_bootstrap_role_arn` (narrower GitOps-only role). You can ignore it if you use a single full-permission deploy role as above.
 
+### When **Terraform apply** runs
+
+- **Push to `main`** — automatically when anything under **`infra/aws/`** changes or when **`.github/workflows/terraform-apply.yaml`** changes. Other merges (apps, `deploy/gitops`, docs, etc.) do **not** run Terraform; Argo CD reconciles Kubernetes from Git.
+- **Manual** — **Actions → Terraform apply** and type **`APPLY`** anytime.
+
 ## Variables (`Settings → Secrets and variables → Actions → Variables`)
 
 Repository **variables** are optional for this repo’s workflows. Terraform reads state backend settings from **secrets** above.
