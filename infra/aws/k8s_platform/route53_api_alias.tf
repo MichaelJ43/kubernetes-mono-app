@@ -53,7 +53,8 @@ resource "aws_route53_record" "api_alias_ipv4" {
 }
 
 resource "aws_route53_record" "api_alias_ipv6" {
-  count   = local.create_api_route53_alias && data.aws_lb.api_ingress[0].ip_address_type == "dualstack" ? 1 : 0
+  # Do not index [0] when data.aws_lb has count 0 — Terraform may still evaluate both operands of &&.
+  count   = try(data.aws_lb.api_ingress[0].ip_address_type, null) == "dualstack" ? 1 : 0
   zone_id = var.external_dns_route53_zone_id
   name    = "api"
   type    = "AAAA"
