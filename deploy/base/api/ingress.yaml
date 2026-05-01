@@ -3,6 +3,8 @@ kind: Ingress
 metadata:
   name: api
   annotations:
+    # Managed in Terraform (k8s_platform route53_api_alias); do not let ExternalDNS fight the same name.
+    external-dns.alpha.kubernetes.io/exclude: "true"
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
