@@ -1,5 +1,48 @@
 locals {
   node_subnet_ids = var.enable_nat_gateway ? module.vpc.private_subnets : module.vpc.public_subnets
+
+  # EKS access entries: GitHub Actions Helm (k8s_platform) uses AWS_DEPLOY_ROLE_ARN; that role
+  # must be allowed to call the Kubernetes API. If it differs from the Terraform-managed role,
+  # grant it explicitly via var.github_actions_deploy_role_arn (set in CI from the same secret).
+  eks_access_entries = merge(
+    {
+      github_terraform = {
+        principal_arn = aws_iam_role.github_terraform.arn
+        policy_associations = {
+          admin = {
+            policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+            access_scope = {
+              type = "cluster"
+            }
+          }
+        }
+      }
+      github_bootstrap = {
+        principal_arn = aws_iam_role.github_bootstrap.arn
+        policy_associations = {
+          admin = {
+            policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+            access_scope = {
+              type = "cluster"
+            }
+          }
+        }
+      }
+    },
+    var.github_actions_deploy_role_arn != null && var.github_actions_deploy_role_arn != aws_iam_role.github_terraform.arn ? {
+      github_actions_deploy = {
+        principal_arn = var.github_actions_deploy_role_arn
+        policy_associations = {
+          admin = {
+            policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+            access_scope = {
+              type = "cluster"
+            }
+          }
+        }
+      }
+    } : {}
+  )
 }
 
 module "eks" {
@@ -52,30 +95,7 @@ module "eks" {
     }
   }
 
-  access_entries = {
-    github_terraform = {
-      principal_arn = aws_iam_role.github_terraform.arn
-      policy_associations = {
-        admin = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = {
-            type = "cluster"
-          }
-        }
-      }
-    }
-    github_bootstrap = {
-      principal_arn = aws_iam_role.github_bootstrap.arn
-      policy_associations = {
-        admin = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = {
-            type = "cluster"
-          }
-        }
-      }
-    }
-  }
+  access_entries = local.eks_access_entries
 
   tags = {
     Environment = "portfolio"

@@ -51,6 +51,19 @@ variable "github_repository" {
   description = "Repository name without org prefix."
 }
 
+variable "github_actions_deploy_role_arn" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = <<-EOT
+    When GitHub Actions assumes a deploy IAM role that is not the foundation-managed
+    github_terraform role, set this to the same ARN as AWS_DEPLOY_ROLE_ARN so EKS grants
+    that principal Kubernetes API access (helm in k8s_platform). Workflows pass this
+    automatically from the secret. Omit or leave null when running locally with the
+    github_terraform role only.
+  EOT
+}
+
 variable "acm_certificate_domain" {
   type        = string
   default     = null
