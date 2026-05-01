@@ -31,11 +31,18 @@ Then, in the **same AWS account and region** as the ALB, any **ISSUED** ACM cert
 
 Details: [Certificate discovery](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/ingress/cert_discovery/).
 
-**Manual steps:**
+### Terraform: ExternalDNS → Route 53 (recommended)
 
-1. Install **AWS Load Balancer Controller** on the cluster (`k8s_platform` Terraform stack).
-2. Ensure the API **Ingress** in Git matches your real DNS name (or fork and change the host + `spec.tls.hosts`).
-3. In **Route 53**, create an **alias** (or CNAME) record `api.k8s.michaelj43.dev` → the ALB DNS name (`kubectl -n portfolio get ingress api`).
+If your **public hosted zone** for `k8s.michaelj43.dev` lives in **Route 53** (with NS delegation from Cloudflare, etc.):
+
+1. Copy the hosted **zone ID** from Route 53 (e.g. `Z0…`).
+2. Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to that ID (or pass `external_dns_route53_zone_id` when applying **`k8s_platform`** locally—see [`infra/aws/examples/k8s_platform/terraform.tfvars.example`](../infra/aws/examples/k8s_platform/terraform.tfvars.example)). **GitHub Actions** maps it to **`TF_VAR_external_dns_route53_zone_id`**.
+3. Run **`terraform apply`** on **`k8s_platform`** (or merge a change under `infra/aws/` so GitHub Actions applies). Terraform installs **[ExternalDNS](https://github.com/kubernetes-sigs/external-dns)** with **IRSA**; it watches **Ingress** resources and creates **alias** records (and ownership TXT records) in that zone for hostnames such as **`api.k8s.michaelj43.dev`** once the AWS Load Balancer Controller has published the ALB address on the Ingress.
+4. **Foundation apply** is only required for VPC/EKS and the usual remote outputs; **k8s_platform** resolves the cluster’s IAM OIDC provider from the live EKS API for ExternalDNS IRSA (it does not depend on the **`oidc_provider_arn`** foundation output).
+
+After Argo has synced the API Ingress, allow a short interval for ExternalDNS to reconcile (chart default loop ~1m).
+
+**Manual alternative (no ExternalDNS):** create an **alias** (or CNAME) record `api.k8s.michaelj43.dev` → the ALB DNS name from `kubectl -n portfolio get ingress api`.
 
 **Argo:** the **`api`** app syncs **`deploy/base/api`**. Optional **`deploy/overlays/aws-prod`** wraps the same base without adding ACM annotations.
 
@@ -45,7 +52,7 @@ If you **must** pin an ARN (e.g. multiple ambiguous certs), add annotation `alb.
 
 ## 4. Terraform: optional ACM output (accounting / docs only)
 
-In `infra/aws/foundation`, optional variable **`acm_certificate_domain`** (e.g. `*.k8s.michaelj43.dev`) exposes output **`acm_certificate_arn`** after `terraform apply`. Useful for logging or **private** automation; it is **not required** for Argo when using certificate discovery.
+In `infra/aws/foundation`, either set **`acm_certificate_arn`** (e.g. repository **Secret** **`TF_ACM_CERTIFICATE_ARN`**, passed as **`TF_VAR_acm_certificate_arn`** in Actions) or optional **`acm_certificate_domain`** (e.g. `*.k8s.michaelj43.dev`) to expose output **`acm_certificate_arn`** after `terraform apply`. Useful for logging or **private** automation; it is **not required** for Argo when using certificate discovery.
 
 **Argo CD does not read GitHub Secrets** for Ingress annotations. To “hide” the ARN, use **discovery** (above) or keep manifests in a **private** repository.
 
@@ -57,6 +64,7 @@ In `infra/aws/foundation`, optional variable **`acm_certificate_domain`** (e.g. 
 | 503 from ALB | Target group health; Security groups; Pods `Ready`; `target-type: ip` matches IP mode |
 | Wrong cert / TLS error | ACM cert in **same region** as ALB; hostname in Ingress matches cert SANs; only one good match or use explicit ARN in a non-public path |
 | Discovery finds no cert | `spec.tls.hosts` / rule `host` aligned with ACM; cert **ISSUED** in same account/region |
+| **api…** does not resolve | **`TF_ROUTE53_HOSTED_ZONE_ID`** set and **k8s_platform** applied; Ingress has ALB hostname in status; `kubectl -n kube-system logs deploy/external-dns` |
 
 ## Renewal
 

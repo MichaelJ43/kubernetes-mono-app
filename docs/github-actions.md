@@ -21,6 +21,8 @@ Create **`build`** and **`deploy`** under **Settings → Environments** (GitHub 
 | **`TF_STATE_BUCKET`** | Yes | Terraform workflows — S3 bucket for remote state (backend `bucket`). |
 | **`TF_LOCK_TABLE`** | Yes | Terraform workflows — DynamoDB table for state locking (`dynamodb_table`). |
 | **`TF_STATE_REGION`** | No | Region where the **state bucket and lock table** live; if unset, workflows default **`us-east-1`** for backend region and `aws configure`. |
+| **`TF_ROUTE53_HOSTED_ZONE_ID`** | No | Public Route 53 **hosted zone ID** for your delegated **`k8s.…`** zone (e.g. `Z0…`). When set, **`k8s_platform`** applies pass **`TF_VAR_external_dns_route53_zone_id`** so **ExternalDNS** creates alias records for Ingress hostnames. Omit if you manage DNS manually. |
+| **`TF_ACM_CERTIFICATE_ARN`** | No | If set, passed as **`TF_VAR_acm_certificate_arn`** on **foundation** plan/apply/destroy so state and output **`acm_certificate_arn`** stay aligned (optional; Ingress still uses ALB **certificate discovery** unless you add an annotation—see [`aws-domain-tls.md`](aws-domain-tls.md)). |
 
 Foundation also outputs `github_actions_bootstrap_role_arn` (narrower GitOps-only role). You can ignore it if you use a single full-permission deploy role as above.
 
@@ -112,3 +114,5 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 7. **k8s_platform plan skipped or “Unable to find remote state”** — The **k8s_platform** stack reads `terraform_remote_state` for **foundation**. Until the foundation state object exists in your S3 backend (after the first **foundation** `terraform apply`), PR **Terraform plan** only runs the **foundation** plan; **k8s_platform** is skipped with a workflow notice so the PR check stays green.
 
 8. **Helm / k8s_platform: “Kubernetes cluster unreachable … provide credentials”** — The IAM principal assumed in Actions (`AWS_DEPLOY_ROLE_ARN`) must have an **EKS access entry** on the cluster. Foundation adds one when **`TF_VAR_github_actions_deploy_role_arn`** matches that ARN (workflows set it from the secret). Apply **foundation** after pulling this behavior, then re-run **k8s_platform**.
+
+9. **Older errors: missing `oidc_provider_arn` in foundation remote state** — Current **`k8s_platform`** looks up the cluster OIDC provider from AWS directly; if you still see this on an old branch, merge the fix or run **foundation** **`terraform apply`** once so remote state includes that output (legacy).

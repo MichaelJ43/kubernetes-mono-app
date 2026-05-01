@@ -73,6 +73,7 @@ jobs:
           TF_VAR_github_repository: ${{ github.event.repository.name }}
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
@@ -90,6 +91,7 @@ jobs:
           TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
           TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
+          TF_VAR_external_dns_route53_zone_id: ${{ secrets.TF_ROUTE53_HOSTED_ZONE_ID }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
