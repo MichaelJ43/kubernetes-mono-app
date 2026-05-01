@@ -2,11 +2,22 @@
 
 Configure these under **Settings → Secrets and variables → Actions** for the repository.
 
+## Environments (`Settings → Environments`)
+
+Workflows use two environments so you can scope **secrets**, **protection rules**, and **deployment branches** per concern:
+
+| Environment | Workflows |
+|-------------|-----------|
+| **`build`** | **`ci.yaml`** — tests and (on `main`) GHCR image push. |
+| **`deploy`** | **`terraform-apply.yaml`**, **`terraform-destroy.yaml`**, **`full-undeploy.yaml`**, **`argocd-bootstrap.yaml`**, **`argocd-teardown.yaml`**. |
+
+Create **`build`** and **`deploy`** under **Settings → Environments** (GitHub adds them automatically on first workflow use if you prefer). Add **required reviewers** or **wait timers** on **`deploy`** for destructive or production paths. Repository secrets are available in environments unless you override with environment-specific secrets.
+
 ## Secrets (`Settings → Secrets and variables → Actions → Secrets`)
 
 | Name | Required | Used by |
 |------|----------|---------|
-| **`AWS_DEPLOY_ROLE_ARN`** | Yes (after the deploy role exists in IAM) | **All** AWS OIDC workflows: `terraform-plan.yaml`, `terraform-apply.yaml`, `terraform-destroy.yaml`, `argocd-bootstrap.yaml`, `argocd-teardown.yaml`. Set to the ARN of **one** IAM role that can run Terraform and EKS bootstrap/teardown (e.g. foundation output `github_actions_terraform_role_arn`, or your own equivalent role). |
+| **`AWS_DEPLOY_ROLE_ARN`** | Yes (after the deploy role exists in IAM) | **All** AWS OIDC workflows: `terraform-plan.yaml`, `terraform-apply.yaml`, `terraform-destroy.yaml`, `full-undeploy.yaml`, `argocd-bootstrap.yaml`, `argocd-teardown.yaml`. Set to the ARN of **one** IAM role that can run Terraform and EKS bootstrap/teardown (e.g. foundation output `github_actions_terraform_role_arn`, or your own equivalent role). |
 | **`TF_STATE_BUCKET`** | Yes | Terraform workflows — S3 bucket for remote state (backend `bucket`). |
 | **`TF_LOCK_TABLE`** | Yes | Terraform workflows — DynamoDB table for state locking (`dynamodb_table`). |
 | **`TF_STATE_REGION`** | No | Region where the **state bucket and lock table** live; if unset, workflows default **`us-east-1`** for backend region and `aws configure`. |
@@ -19,6 +30,7 @@ If **`AWS_DEPLOY_ROLE_ARN`** is **not** the foundation output `github_actions_te
 
 - **Push to `main`** — automatically when anything under **`infra/aws/`** changes or when **`.github/workflows/terraform-apply.yaml`** changes. Other merges (apps, `deploy/gitops`, docs, etc.) do **not** run Terraform; Argo CD reconciles Kubernetes from Git.
 - **Manual** — **Actions → Terraform apply** and type **`APPLY`** anytime.
+- **Full undeploy** — **Actions → Full undeploy**: type **`FULL UNDEPLOY`**, set cluster name / region; removes Argo root app + Helm (unless **skip_argo**), then **`terraform destroy`** on **k8s_platform** and **foundation**. For Terraform-only teardown, use **Terraform destroy** and type **`DELETE`**.
 
 ## Variables (`Settings → Secrets and variables → Actions → Variables`)
 
