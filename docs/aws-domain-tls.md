@@ -37,10 +37,10 @@ If your **public hosted zone** for `k8s.michaelj43.dev` lives in **Route 53** (w
 
 1. Copy the hosted **zone ID** from Route 53 (e.g. `Z0…`).
 2. Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to that ID (or pass `external_dns_route53_zone_id` when applying **`k8s_platform`** locally—see [`infra/aws/examples/k8s_platform/terraform.tfvars.example`](../infra/aws/examples/k8s_platform/terraform.tfvars.example)). **GitHub Actions** maps it to **`TF_VAR_external_dns_route53_zone_id`**.
-3. Run **`terraform apply`** on **`k8s_platform`** (or merge a change under `infra/aws/` so GitHub Actions applies). Terraform installs **[ExternalDNS](https://github.com/kubernetes-sigs/external-dns)** with **IRSA** for **other** Ingresses, and creates **Terraform-managed Route 53 alias** records for **`api.<your zone>`** after the **AWS Load Balancer Controller** has created the ALB for the **`portfolio/api`** Ingress (same tags `elbv2.k8s.aws/cluster` + `ingress.k8s.aws/stack`). The API Ingress carries `external-dns.alpha.kubernetes.io/exclude: "true"` so ExternalDNS does not fight the same name.
+3. Run **`terraform apply`** on **`k8s_platform`** (or merge a change under `infra/aws/` so GitHub Actions applies). Terraform installs **[ExternalDNS](https://github.com/kubernetes-sigs/external-dns)** with **IRSA**; it watches **Ingress** resources and creates **alias** records (and ownership TXT records) in that zone for hostnames such as **`api.k8s.michaelj43.dev`** once the AWS Load Balancer Controller has published the ALB address on the Ingress.
 4. **Foundation apply** is only required for VPC/EKS and the usual remote outputs; **k8s_platform** resolves the cluster’s IAM OIDC provider from the live EKS API for ExternalDNS IRSA (it does not depend on the **`oidc_provider_arn`** foundation output).
 
-After Argo has synced the API Ingress and the ALB exists, run **`k8s_platform`** **`terraform apply`** again if the first apply did not yet see the ALB (output **`api_route53_alias_managed`** becomes true when the **`api`** alias exists).
+After Argo has synced the API Ingress, allow a short interval for ExternalDNS to reconcile (chart default loop ~1m). No second Terraform apply is required for the API DNS record.
 
 **Manual alternative (no ExternalDNS):** create an **alias** (or CNAME) record `api.k8s.michaelj43.dev` → the ALB DNS name from `kubectl -n portfolio get ingress api`.
 
@@ -64,7 +64,7 @@ In `infra/aws/foundation`, either set **`acm_certificate_arn`** (e.g. repository
 | 503 from ALB | Target group health; Security groups; Pods `Ready`; `target-type: ip` matches IP mode |
 | Wrong cert / TLS error | ACM cert in **same region** as ALB; hostname in Ingress matches cert SANs; only one good match or use explicit ARN in a non-public path |
 | Discovery finds no cert | `spec.tls.hosts` / rule `host` aligned with ACM; cert **ISSUED** in same account/region |
-| **api…** does not resolve | **`TF_ROUTE53_HOSTED_ZONE_ID`** set; **`kubectl -n portfolio get ingress api`** shows an ALB hostname; **`terraform output api_route53_alias_managed`** true after **k8s_platform** apply finds that ALB (re-run apply once the Ingress is ready). |
+| **api…** does not resolve | **`TF_ROUTE53_HOSTED_ZONE_ID`** set and **k8s_platform** applied; Ingress has ALB hostname in status; `kubectl -n kube-system logs deploy/external-dns` |
 
 ## Renewal
 
