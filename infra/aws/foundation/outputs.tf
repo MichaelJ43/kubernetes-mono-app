@@ -33,8 +33,12 @@ output "aws_load_balancer_controller_irsa_role_arn" {
 }
 
 output "acm_certificate_arn" {
-  description = "When acm_certificate_domain is set, the matching ISSUED ACM certificate ARN (optional; Argo Ingress uses discovery without this in Git)."
-  value       = length(data.aws_acm_certificate.ingress) > 0 ? data.aws_acm_certificate.ingress[0].arn : null
+  description = "When acm_certificate_arn or acm_certificate_domain yields a cert, that ARN (optional; Argo Ingress uses discovery without this in Git)."
+  value = (
+    var.acm_certificate_arn != null && var.acm_certificate_arn != ""
+    ) ? var.acm_certificate_arn : (
+    length(data.aws_acm_certificate.ingress) > 0 ? data.aws_acm_certificate.ingress[0].arn : null
+  )
 }
 
 output "vpc_id" {

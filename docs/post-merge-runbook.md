@@ -8,6 +8,7 @@ Order to go from **merged repo** to **API reachable on your domain** on AWS. Aut
 - In GitHub: **Actions secrets** from [`github-actions.md`](github-actions.md):
   - `AWS_DEPLOY_ROLE_ARN`
   - `TF_STATE_BUCKET`, `TF_LOCK_TABLE`, optional `TF_STATE_REGION`
+  - Optional: `TF_ROUTE53_HOSTED_ZONE_ID`, `TF_ACM_CERTIFICATE_ARN` (see [`github-actions.md`](github-actions.md))
 - Fork or rename? Update `repoURL` in `deploy/gitops/**/*.yaml` and image references per [`README.md`](../README.md).
 
 ## 1. Terraform: foundation
@@ -41,7 +42,7 @@ terraform apply
 
 Or the same **Terraform apply** workflow (runs foundation then k8s_platform)—manually or automatically on infra merges to **`main`**.
 
-Set repository **Variable** **`EXTERNAL_DNS_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
+Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
 
 ## 3. Domain, ACM, DNS
 
@@ -69,7 +70,7 @@ If the package is **private**, configure pull access (e.g. `imagePullSecrets` / 
 
 ## 7. DNS record for the API hostname
 
-Prefer **ExternalDNS** from **`k8s_platform`**: set **`EXTERNAL_DNS_ZONE_ID`** (hosted zone for `k8s…`) and apply Terraform; after the Ingress is synced, ExternalDNS creates the **alias** for **`api.k8s…`**.
+Prefer **ExternalDNS** from **`k8s_platform`**: set **`TF_ROUTE53_HOSTED_ZONE_ID`** (hosted zone for `k8s…`) and apply Terraform; after the Ingress is synced, ExternalDNS creates the **alias** for **`api.k8s…`**.
 
 **Manual:** create **Route 53** **alias** (or CNAME) **`api.k8s…`** → ALB hostname (`kubectl -n portfolio get ingress api`).
 

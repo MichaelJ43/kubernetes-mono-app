@@ -36,7 +36,7 @@ Details: [Certificate discovery](https://kubernetes-sigs.github.io/aws-load-bala
 If your **public hosted zone** for `k8s.michaelj43.dev` lives in **Route 53** (with NS delegation from Cloudflare, etc.):
 
 1. Copy the hosted **zone ID** from Route 53 (e.g. `Z0…`).
-2. Set repository **Variable** **`EXTERNAL_DNS_ZONE_ID`** to that ID (or pass `external_dns_route53_zone_id` when applying **`k8s_platform`** locally—see [`infra/aws/examples/k8s_platform/terraform.tfvars.example`](../infra/aws/examples/k8s_platform/terraform.tfvars.example)).
+2. Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to that ID (or pass `external_dns_route53_zone_id` when applying **`k8s_platform`** locally—see [`infra/aws/examples/k8s_platform/terraform.tfvars.example`](../infra/aws/examples/k8s_platform/terraform.tfvars.example)). **GitHub Actions** maps it to **`TF_VAR_external_dns_route53_zone_id`**.
 3. Run **`terraform apply`** on **`k8s_platform`** (or merge a change under `infra/aws/` so GitHub Actions applies). Terraform installs **[ExternalDNS](https://github.com/kubernetes-sigs/external-dns)** with **IRSA**; it watches **Ingress** resources and creates **alias** records (and ownership TXT records) in that zone for hostnames such as **`api.k8s.michaelj43.dev`** once the AWS Load Balancer Controller has published the ALB address on the Ingress.
 4. **Apply foundation at least once** after updating the repo so remote state includes **`oidc_provider_arn`** (required for the ExternalDNS IRSA role).
 
@@ -52,7 +52,7 @@ If you **must** pin an ARN (e.g. multiple ambiguous certs), add annotation `alb.
 
 ## 4. Terraform: optional ACM output (accounting / docs only)
 
-In `infra/aws/foundation`, optional variable **`acm_certificate_domain`** (e.g. `*.k8s.michaelj43.dev`) exposes output **`acm_certificate_arn`** after `terraform apply`. Useful for logging or **private** automation; it is **not required** for Argo when using certificate discovery.
+In `infra/aws/foundation`, either set **`acm_certificate_arn`** (e.g. repository **Secret** **`TF_ACM_CERTIFICATE_ARN`**, passed as **`TF_VAR_acm_certificate_arn`** in Actions) or optional **`acm_certificate_domain`** (e.g. `*.k8s.michaelj43.dev`) to expose output **`acm_certificate_arn`** after `terraform apply`. Useful for logging or **private** automation; it is **not required** for Argo when using certificate discovery.
 
 **Argo CD does not read GitHub Secrets** for Ingress annotations. To “hide” the ARN, use **discovery** (above) or keep manifests in a **private** repository.
 
@@ -64,7 +64,7 @@ In `infra/aws/foundation`, optional variable **`acm_certificate_domain`** (e.g. 
 | 503 from ALB | Target group health; Security groups; Pods `Ready`; `target-type: ip` matches IP mode |
 | Wrong cert / TLS error | ACM cert in **same region** as ALB; hostname in Ingress matches cert SANs; only one good match or use explicit ARN in a non-public path |
 | Discovery finds no cert | `spec.tls.hosts` / rule `host` aligned with ACM; cert **ISSUED** in same account/region |
-| **api…** does not resolve | **`EXTERNAL_DNS_ZONE_ID`** set and **k8s_platform** applied; Ingress has ALB hostname in status; `kubectl -n kube-system logs deploy/external-dns` |
+| **api…** does not resolve | **`TF_ROUTE53_HOSTED_ZONE_ID`** set and **k8s_platform** applied; Ingress has ALB hostname in status; `kubectl -n kube-system logs deploy/external-dns` |
 
 ## Renewal
 

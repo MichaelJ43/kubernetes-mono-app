@@ -71,7 +71,19 @@ variable "acm_certificate_domain" {
   description = <<-EOT
     Optional. Primary domain name of an ISSUED ACM certificate in var.aws_region (same region as ALB).
     Example: "*.k8s.example.dev" or "api.k8s.example.dev". Must match the name shown in ACM.
-    When set, Terraform exposes output acm_certificate_arn (optional reference only; default Ingress does not need ARN in Git).
+    Ignored when acm_certificate_arn is set.
+    Exposes output acm_certificate_arn (optional reference; default Ingress uses discovery without ARN in Git).
+  EOT
+}
+
+variable "acm_certificate_arn" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = <<-EOT
+    Optional. Full ARN of an ISSUED ACM certificate in var.aws_region (same as ALB).
+    When set (e.g. TF_ACM_CERTIFICATE_ARN in GitHub Actions), takes precedence over acm_certificate_domain
+    for output acm_certificate_arn. Does not modify Kubernetes manifests; Ingress still uses discovery unless you overlay an annotation.
   EOT
 }
 
