@@ -106,6 +106,7 @@ jobs:
           TF_VAR_github_organization: ${{ github.repository_owner }}
           TF_VAR_github_repository: ${{ github.event.repository.name }}
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
         run: terraform plan -input=false -no-color
 
       - name: Foundation state present in S3 (k8s_platform needs remote_state)

@@ -13,6 +13,8 @@ Configure these under **Settings → Secrets and variables → Actions** for the
 
 Foundation also outputs `github_actions_bootstrap_role_arn` (narrower GitOps-only role). You can ignore it if you use a single full-permission deploy role as above.
 
+If **`AWS_DEPLOY_ROLE_ARN`** is **not** the foundation output `github_actions_terraform_role_arn` (for example you use another OIDC role), Terraform **foundation** must include that role as an **EKS access entry** so **k8s_platform** (Helm) can reach the Kubernetes API. The apply/plan workflows pass **`TF_VAR_github_actions_deploy_role_arn`** from **`AWS_DEPLOY_ROLE_ARN`**; run **`terraform apply`** on **foundation** once after upgrading the repo so the entry exists.
+
 ### When **Terraform apply** runs
 
 - **Push to `main`** — automatically when anything under **`infra/aws/`** changes or when **`.github/workflows/terraform-apply.yaml`** changes. Other merges (apps, `deploy/gitops`, docs, etc.) do **not** run Terraform; Argo CD reconciles Kubernetes from Git.
@@ -96,3 +98,5 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 6. **Backend secrets** — `TF_STATE_BUCKET` and `TF_LOCK_TABLE` must be set (repository **Secrets**). If either is empty, `terraform init` fails with *The value cannot be empty or all whitespace* on the S3 backend `bucket` / `dynamodb_table` line; workflows fail earlier with an explicit error.
 
 7. **k8s_platform plan skipped or “Unable to find remote state”** — The **k8s_platform** stack reads `terraform_remote_state` for **foundation**. Until the foundation state object exists in your S3 backend (after the first **foundation** `terraform apply`), PR **Terraform plan** only runs the **foundation** plan; **k8s_platform** is skipped with a workflow notice so the PR check stays green.
+
+8. **Helm / k8s_platform: “Kubernetes cluster unreachable … provide credentials”** — The IAM principal assumed in Actions (`AWS_DEPLOY_ROLE_ARN`) must have an **EKS access entry** on the cluster. Foundation adds one when **`TF_VAR_github_actions_deploy_role_arn`** matches that ARN (workflows set it from the secret). Apply **foundation** after pulling this behavior, then re-run **k8s_platform**.
