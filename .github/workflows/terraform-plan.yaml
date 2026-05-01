@@ -175,4 +175,5 @@ jobs:
           TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
           TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
+          TF_VAR_external_dns_route53_zone_id: ${{ vars.EXTERNAL_DNS_ZONE_ID }}
         run: terraform plan -input=false -no-color

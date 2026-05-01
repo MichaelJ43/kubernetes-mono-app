@@ -40,3 +40,8 @@ output "acm_certificate_arn" {
 output "vpc_id" {
   value = module.vpc.vpc_id
 }
+
+output "oidc_provider_arn" {
+  description = "EKS IRSA OIDC provider ARN (for additional IRSA roles in k8s_platform, e.g. ExternalDNS)."
+  value       = module.eks.oidc_provider_arn
+}

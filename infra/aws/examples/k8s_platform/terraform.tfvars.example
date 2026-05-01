@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) for local k8s_platform applies.
+# State backend: pass -backend-config or use same bucket/key pattern as CI.
+
+# aws_region        = "us-east-1"
+# state_bucket      = "your-tf-state-bucket"
+# state_region      = "us-east-1"
+# lock_table        = "your-tf-lock-table"
+# foundation_state_key = "kubernetes-mono-app/foundation/terraform.tfstate"
+
+# Route 53 public hosted zone ID for k8s.example.dev (creates ExternalDNS + IRSA).
+# external_dns_route53_zone_id = "Z0123456789ABCDEFGHIJ"

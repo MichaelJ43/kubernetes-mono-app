@@ -5,7 +5,7 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
 | Stack | Path | What it creates |
 |-------|------|------------------|
 | **foundation** | `infra/aws/foundation` | VPC, EKS (see `cluster_version` default in `variables.tf`), managed nodes, `aws-ebs-csi-driver` addon, GitHub OIDC IAM roles (Terraform + bootstrap), IRSA role for AWS LB Controller, EKS access entries for both GitHub roles. |
-| **k8s_platform** | `infra/aws/k8s_platform` | **Helm**: `aws-load-balancer-controller` into `kube-system` (uses IRSA ARN from foundation remote state). |
+| **k8s_platform** | `infra/aws/k8s_platform` | **Helm**: `aws-load-balancer-controller` into `kube-system`; optional **ExternalDNS** when `EXTERNAL_DNS_ZONE_ID` / `external_dns_route53_zone_id` is set (Ingress → Route 53 aliases). |
 
 **Argo CD** (install + app manifests) stays **inside the cluster** after bootstrap — Terraform does not install Argo.
 
@@ -14,6 +14,7 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
 - AWS account, `aws` CLI configured for first apply.
 - **S3 bucket** + **DynamoDB table** for Terraform state (you already have these).
 - GitHub repo **Secrets** for Terraform/AWS (see [`../docs/github-actions.md`](../docs/github-actions.md)).
+- For **automatic DNS** under your delegated zone (e.g. `api.k8s.…` → ALB): set repository **Variable** **`EXTERNAL_DNS_ZONE_ID`** to the Route 53 **hosted zone ID** of `k8s.yourdomain` (see [`../docs/aws-domain-tls.md`](../docs/aws-domain-tls.md)).
 
 **EKS control plane upgrades:** AWS allows only **one minor version per apply** (for example 1.29 → 1.30, then a later apply 1.30 → 1.31). If apply fails with `Unsupported Kubernetes minor version update`, adjust `cluster_version` in `variables.tf` / `terraform.tfvars` to the next minor only.
 

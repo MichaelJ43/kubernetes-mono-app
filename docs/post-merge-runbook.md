@@ -41,6 +41,8 @@ terraform apply
 
 Or the same **Terraform apply** workflow (runs foundation then k8s_platform)—manually or automatically on infra merges to **`main`**.
 
+Set repository **Variable** **`EXTERNAL_DNS_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
+
 ## 3. Domain, ACM, DNS
 
 Follow **[`aws-domain-tls.md`](aws-domain-tls.md)** (hosted zone, ACM in **ALB region**, validation records).
@@ -67,7 +69,9 @@ If the package is **private**, configure pull access (e.g. `imagePullSecrets` / 
 
 ## 7. DNS record for the API hostname
 
-When the **Ingress** provisions an ALB, create **Route 53** (in `k8s.michaelj43.dev` or your zone) an **alias** (or CNAME) from **`api.k8s…`** → ALB hostname (`kubectl -n portfolio get ingress api`).
+Prefer **ExternalDNS** from **`k8s_platform`**: set **`EXTERNAL_DNS_ZONE_ID`** (hosted zone for `k8s…`) and apply Terraform; after the Ingress is synced, ExternalDNS creates the **alias** for **`api.k8s…`**.
+
+**Manual:** create **Route 53** **alias** (or CNAME) **`api.k8s…`** → ALB hostname (`kubectl -n portfolio get ingress api`).
 
 ## 8. Verify
 

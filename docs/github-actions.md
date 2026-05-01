@@ -55,6 +55,7 @@ Optional convenience (not read by workflows today):
 
 | Name | Example | Notes |
 |------|---------|-------|
+| **`EXTERNAL_DNS_ZONE_ID`** | `Z1234567890ABC` | **Repository variable** (`Settings → Secrets and variables → Actions → Variables`). Public Route 53 **hosted zone ID** for `k8s.yourdomain` (same zone as ACM DNS validation). When set, **k8s_platform** installs **ExternalDNS** and creates alias records for Ingress hostnames (e.g. `api.k8s…`). Leave unset if you manage DNS manually. |
 | **`EKS_CLUSTER_NAME`** | `k8s-mono` | Should match `cluster_name` in `infra/aws/foundation` — document only; bootstrap workflow still asks for cluster name unless you extend the workflow. |
 
 ## First-time chicken-and-egg
@@ -112,3 +113,5 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 7. **k8s_platform plan skipped or “Unable to find remote state”** — The **k8s_platform** stack reads `terraform_remote_state` for **foundation**. Until the foundation state object exists in your S3 backend (after the first **foundation** `terraform apply`), PR **Terraform plan** only runs the **foundation** plan; **k8s_platform** is skipped with a workflow notice so the PR check stays green.
 
 8. **Helm / k8s_platform: “Kubernetes cluster unreachable … provide credentials”** — The IAM principal assumed in Actions (`AWS_DEPLOY_ROLE_ARN`) must have an **EKS access entry** on the cluster. Foundation adds one when **`TF_VAR_github_actions_deploy_role_arn`** matches that ARN (workflows set it from the secret). Apply **foundation** after pulling this behavior, then re-run **k8s_platform**.
+
+9. **k8s_platform: missing `oidc_provider_arn` in foundation remote state** — Run **foundation** **`terraform apply`** once after upgrading the repo (adds the output for ExternalDNS IRSA).
