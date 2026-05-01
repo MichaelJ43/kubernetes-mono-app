@@ -127,7 +127,7 @@ jobs:
             --namespace argocd \
             --create-namespace \
             --wait \
-            --timeout 15m \
+            --timeout 30m \
             -f infra/argocd/values.yaml
 
       - name: Apply root app-of-apps
