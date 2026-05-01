@@ -11,8 +11,12 @@ variable "cluster_name" {
 
 variable "cluster_version" {
   type        = string
-  default     = "1.31"
-  description = "EKS control plane version."
+  default     = "1.30"
+  description = <<-EOT
+    EKS control plane version. AWS allows only **one minor version upgrade at a time**
+    (e.g. 1.29 → 1.30, then 1.30 → 1.31 in a later apply). Greenfield clusters can use
+    the latest default; upgrading an existing cluster may require stepping this value.
+  EOT
 }
 
 variable "create_github_oidc_provider" {
