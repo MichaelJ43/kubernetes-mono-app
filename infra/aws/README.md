@@ -17,6 +17,8 @@ Two stacks share one **S3 backend** (different keys) and one **DynamoDB** lock t
 
 **EKS control plane upgrades:** AWS allows only **one minor version per apply** (for example 1.29 → 1.30, then a later apply 1.30 → 1.31). If apply fails with `Unsupported Kubernetes minor version update`, adjust `cluster_version` in `variables.tf` / `terraform.tfvars` to the next minor only.
 
+**EBS CSI add-on:** The managed `aws-ebs-csi-driver` add-on needs an **IRSA role** (`module.ebs_csi_irsa` in `eks.tf`). Without `service_account_role_arn`, the add-on can sit in `CREATING` until Terraform times out. If a failed run left a stuck add-on in AWS, delete it once (`aws eks delete-addon --cluster-name … --addon-name aws-ebs-csi-driver`) and re-apply.
+
 ## First apply (local)
 
 1. Copy `examples/backend-foundation.hcl.example` → `backend.hcl` (gitignored path recommended: store outside repo or use `-backend-config` flags).
