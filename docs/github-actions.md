@@ -30,8 +30,8 @@ If **`AWS_DEPLOY_ROLE_ARN`** is **not** the foundation output `github_actions_te
 
 ### When **Terraform apply** runs
 
-- **Push to `main`** — automatically when anything under **`infra/aws/`** changes or when **`.github/workflows/terraform-apply.yaml`** changes. Other merges (apps, `deploy/gitops`, docs, etc.) do **not** run Terraform; Argo CD reconciles Kubernetes from Git.
-- **Manual** — **Actions → Terraform apply** and type **`APPLY`** anytime.
+- **Push to `main`** — automatically when anything under **`infra/aws/`** changes or when **`.github/workflows/terraform-apply.yaml`** changes. After Terraform succeeds, the same workflow installs/upgrades **Argo CD** and applies the root app-of-apps. Other merges (apps, `deploy/gitops`, docs, etc.) do **not** run Terraform; Argo CD reconciles Kubernetes from Git once bootstrapped.
+- **Manual** — **Actions → Terraform apply** and type **`APPLY`** anytime; it also bootstraps/repairs Argo CD after a successful apply.
 - **Full undeploy** — **Actions → Full undeploy**: type **`FULL UNDEPLOY`**, set cluster name / region; removes Argo root app + Helm (unless **skip_argo**), then **`terraform destroy`** on **k8s_platform** and **foundation**. For Terraform-only teardown, use **Terraform destroy** and type **`DELETE`**.
 
 ## Variables (`Settings → Secrets and variables → Actions → Variables`)

@@ -1,6 +1,6 @@
 name: Terraform apply
 
-# Applies foundation then k8s_platform (Helm: AWS Load Balancer Controller).
+# Applies foundation then k8s_platform (Helm: AWS Load Balancer Controller), then bootstraps Argo CD.
 # Requires: S3 bucket + DynamoDB lock (secrets TF_STATE_BUCKET, TF_LOCK_TABLE; optional TF_STATE_REGION);
 #           state keys are <repo>/foundation/... and <repo>/k8s-platform/... from github.event.repository.name.
 #           IAM role in secret AWS_DEPLOY_ROLE_ARN (same secret as Argo bootstrap/teardown).
@@ -100,3 +100,35 @@ jobs:
             -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
           terraform apply -input=false -auto-approve
+
+      - name: Read foundation outputs
+        id: foundation-outputs
+        working-directory: infra/aws/foundation
+        run: |
+          echo "cluster_name=$(terraform output -raw cluster_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Argo CD bootstrap tools
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ steps.foundation-outputs.outputs.cluster_name }}" \
+            --region "${{ env.AWS_REGION }}"
+
+      - name: Install or upgrade Argo CD
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace argocd \
+            --create-namespace \
+            --wait \
+            --timeout 15m \
+            -f infra/argocd/values.yaml
+
+      - name: Apply root app-of-apps
+        run: kubectl apply -f deploy/gitops/root-app.yaml

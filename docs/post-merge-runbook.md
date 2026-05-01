@@ -40,7 +40,7 @@ terraform init -backend-config=...   # key: <repo>/k8s-platform/terraform.tfstat
 terraform apply
 ```
 
-Or the same **Terraform apply** workflow (runs foundation then k8s_platform)—manually or automatically on infra merges to **`main`**.
+Or the same **Terraform apply** workflow (runs foundation then k8s_platform, then installs/upgrades Argo CD and applies the root app)—manually or automatically on infra merges to **`main`**.
 
 Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
 
@@ -62,9 +62,9 @@ If the package is **private**, configure pull access (e.g. `imagePullSecrets` / 
 
 ## 6. Argo CD bootstrap
 
-1. **Actions → Argo CD bootstrap** (`argocd-bootstrap.yaml`).
-2. Inputs: `cluster_name` and `aws_region` match Terraform outputs.
-3. Workflow installs Argo (`infra/argocd/values.yaml`), then `kubectl apply -f deploy/gitops/root-app.yaml`.
+The **Terraform apply** workflow now bootstraps Argo CD automatically after a successful deploy: it installs/upgrades Argo (`infra/argocd/values.yaml`), then runs `kubectl apply -f deploy/gitops/root-app.yaml`.
+
+Use **Actions → Argo CD bootstrap** (`argocd-bootstrap.yaml`) only for an explicit repair/re-run. Inputs: `cluster_name` and `aws_region` match Terraform outputs.
 
 **Admin password / UI:** see [`runbooks/bootstrap.md`](runbooks/bootstrap.md).
 
