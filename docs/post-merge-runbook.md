@@ -23,7 +23,7 @@ terraform init -backend-config=...
 terraform apply
 ```
 
-**Or** use **Actions → Terraform apply** after secrets exist (confirm `APPLY`).
+**Or** use **Actions → Terraform apply** after secrets exist (confirm **`APPLY`**), or merge a change under **`infra/aws/`** so the workflow applies automatically (see [`github-actions.md`](github-actions.md)).
 
 **Copy outputs:** `cluster_name`, `aws_region`, `github_actions_terraform_role_arn` → ensure `AWS_DEPLOY_ROLE_ARN` matches your single deploy role.
 
@@ -39,7 +39,7 @@ terraform init -backend-config=...   # key: <repo>/k8s-platform/terraform.tfstat
 terraform apply
 ```
 
-Or the same **Terraform apply** workflow (runs foundation then k8s_platform).
+Or the same **Terraform apply** workflow (runs foundation then k8s_platform)—manually or automatically on infra merges to **`main`**.
 
 ## 3. Domain, ACM, DNS
 
