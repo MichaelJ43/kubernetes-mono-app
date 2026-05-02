@@ -52,16 +52,38 @@ jobs:
         run: |
           aws eks update-kubeconfig --name "${{ inputs.cluster_name }}" --region "${{ inputs.aws_region }}"
 
+      - name: Prepare Argo CD Helm (repo + clear stuck hook Jobs)
+        run: |
+          set -euo pipefail
+          helm repo add argo https://argoproj.github.io/argo-helm || true
+          helm repo update
+          if kubectl get ns argocd >/dev/null 2>&1; then
+            jobs=$(kubectl -n argocd get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
+            for j in ${jobs:-}; do
+              case "$j" in
+                *redis*secret*init*) kubectl -n argocd delete job "$j" --ignore-not-found ;;
+              esac
+            done
+            kubectl -n argocd delete pods -l app.kubernetes.io/component=redis-secret-init --ignore-not-found || true
+          fi
+
       - name: Install Argo CD
         run: |
-          helm repo add argo https://argoproj.github.io/argo-helm
-          helm repo update
+          set -euo pipefail
           helm upgrade --install argocd argo/argo-cd \
+            --version 9.5.11 \
             --namespace argocd \
             --create-namespace \
             --wait \
             --timeout 30m \
             -f infra/argocd/values.yaml
+
+      - name: Argo CD Helm diagnostics
+        if: failure()
+        run: |
+          kubectl get ns argocd || true
+          kubectl -n argocd get deploy,sts,ds,svc,jobs,pods,events --sort-by='.lastTimestamp' 2>/dev/null | tail -120 || true
+          helm status argocd -n argocd 2>/dev/null || true
 
       - name: Apply root app-of-apps
         run: kubectl apply -f deploy/gitops/root-app.yaml
