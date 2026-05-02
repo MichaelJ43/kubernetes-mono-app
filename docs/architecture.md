@@ -7,7 +7,7 @@ Internet → Route 53 (k8s.michaelj43.dev) → ALB (TLS via ACM)
         → AWS Load Balancer Controller → Ingress `api`
         → Service `api` (ClusterIP) → Pods (Go API)
         → CloudNativePG `Cluster` `portfolio-db` (PostgreSQL)
-        → Bitnami Redis (cache, in-cluster)
+        → Redis — Docker Official image (cache, in-cluster; `deploy/base/redis`)
 ```
 
 Git is the **source of truth** for the workload: Argo CD reads `deploy/gitops/` and applies child `Application` objects, which in turn sync Helm/Kustomize paths in this mono-repo.

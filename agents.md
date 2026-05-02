@@ -19,7 +19,7 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 | `deploy/base/api` | API Deployment/Service/Ingress; Argo **api** app syncs this path; ALB **certificate discovery** (no ACM ARN in Git) |
 | `deploy/overlays/aws-prod` | Optional Kustomize overlay for prod-only patches (defaults to wrapping `base/api` without ACM annotations) |
 | `deploy/base/postgres` | CloudNativePG `Cluster` + namespace |
-| `deploy/helm/redis-values.yaml` | Reference values (Helm is inlined in Argo app for simplicity) |
+| `deploy/base/redis` | Redis Deployment + Service `redis-master` (Docker Official image on ECR Public) |
 | `infra/argocd` | Helm values for **bootstrap** only |
 | `tests/component` | `docker-compose` integration |
 | `docs/` | Architecture, TLS, GitOps, testing, runbooks |
