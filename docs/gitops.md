@@ -6,7 +6,7 @@ Argo CD is the **continuous reconciler** for everything under the application st
 
 - CloudNativePG **operator** (`deploy/gitops/apps/cnpg-operator.yaml`)
 - **Postgres cluster** CR (`deploy/base/postgres`)
-- **Redis** (Bitnami Helm via `deploy/gitops/apps/redis.yaml`)
+- **Redis** (Docker Official image via `deploy/base/redis`; Service **`redis-master`** matches API `REDIS_ADDR`)
 - **API** Deployment / Service / `Ingress` (`deploy/base/api`; ALB **certificate discovery** for TLS—see `docs/aws-domain-tls.md`)
 
 Bootstrap-time installs (`infra/argocd/`) are **not** auto-synced from this repo unless you choose to manage Argo itself via Argo—that is intentionally out of scope for the first pass.
@@ -19,9 +19,13 @@ Bootstrap-time installs (`infra/argocd/`) are **not** auto-synced from this repo
 Sync waves (see annotations):
 
 - `-2` — CNPG operator (CRDs / controller)
-- `0` — Redis (Bitnami Helm; **`image.registry`** + **`global.imageRegistry`** → ECR Public; **`global.security.allowInsecureImages`** required when registry ≠ Docker Hub)
+- `0` — Redis (`deploy/base/redis`; **`public.ecr.aws/docker/library/redis`** — no Bitnami chart)
 - `1` — Postgres `Cluster` (expects EBS CSI `StorageClass` **`portfolio-gp3`** from `deploy/base/postgres`)
 - `2` — API (expects DB secret `portfolio-db-app` and Redis service)
+
+## Migrating off Bitnami Redis
+
+If you previously synced the **Bitnami Helm** chart, Argo **prune** removes chart-managed objects after this repo switches to **`deploy/base/redis`**. If anything is stuck (old `StatefulSet`, Helm secrets), run **`helm uninstall redis -n portfolio`** once (if a Helm release still exists) or delete leftover **`redis-*`** workloads manually, then **Sync** the **redis** Application.
 
 ## Replacing `repoURL`
 

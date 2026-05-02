@@ -8,32 +8,9 @@ metadata:
 spec:
   project: default
   source:
-    chart: redis
-    repoURL: https://charts.bitnami.com/bitnami
-    targetRevision: 20.6.3
-    helm:
-      releaseName: redis
-      values: |
-        # Avoid Docker Hub pulls (anonymous rate limits → ImagePullBackOff). Bitnami mirrors on ECR Public.
-        # Charts ≥ security gate require explicit opt-in when registry ≠ docker.io (see bitnami/charts#30850).
-        global:
-          imageRegistry: public.ecr.aws
-          security:
-            allowInsecureImages: true
-        # Chart defaults set image.registry: docker.io; Helm merge keeps that, so global.imageRegistry alone
-        # does not switch pulls — must override the root image registry (common.images.image).
-        image:
-          registry: public.ecr.aws
-        architecture: standalone
-        auth:
-          enabled: false
-        master:
-          persistence:
-            enabled: false
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
+    repoURL: https://github.com/michaelj43/kubernetes-mono-app.git
+    targetRevision: main
+    path: deploy/base/redis
   destination:
     server: https://kubernetes.default.svc
     namespace: portfolio
