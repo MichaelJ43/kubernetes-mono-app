@@ -67,6 +67,15 @@ jobs:
             kubectl -n argocd delete pods -l app.kubernetes.io/component=redis-secret-init --ignore-not-found || true
           fi
 
+      - name: Ensure Argo CD Redis secret
+        run: |
+          set -euo pipefail
+          kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+          if ! kubectl -n argocd get secret argocd-redis >/dev/null 2>&1; then
+            kubectl -n argocd create secret generic argocd-redis \
+              --from-literal=auth="$(openssl rand -base64 32)"
+          fi
+
       - name: Install Argo CD
         run: |
           set -euo pipefail

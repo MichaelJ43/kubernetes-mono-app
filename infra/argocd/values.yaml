@@ -13,5 +13,10 @@ repoServer:
 redis:
   enabled: true
 
+# Avoid the chart's redis-secret-init Helm hook. In CI that hook repeatedly
+# timed out; workflows create argocd-redis/auth before Helm runs instead.
+redisSecretInit:
+  enabled: false
+
 dex:
   enabled: false
