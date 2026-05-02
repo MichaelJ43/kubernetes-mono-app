@@ -81,7 +81,7 @@ kubectl get applications -n argocd
 kubectl -n portfolio get pods,ingress
 curl -fsS https://api.k8s.michaelj43.dev/health   # API Ingress
 curl -fsS https://k8s.michaelj43.dev/health       # portal (after CI pushed portal image + Argo synced)
-open https://k8s.michaelj43.dev/status            # Argo app names / health / sync (public)
+xdg-open https://k8s.michaelj43.dev/status 2>/dev/null || true   # or open in a browser — Argo app names / health / sync
 ```
 
 ## 9. If something fails
