@@ -43,9 +43,14 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 
 Port-forward UI (when ingress is disabled):
 
+With **`configs.params.server.insecure: true`** (TLS only on the ALB), the **pod serves plain HTTP**. Forward the Service **HTTP** port and open **`http://`** — **`8080:443`** targets TLS on the Service and leads to **connection reset** when the browser speaks HTTPS to an HTTP-only listener.
+
 ```bash
-kubectl -n argocd port-forward svc/argocd-server 8080:443
+kubectl -n argocd port-forward svc/argocd-server 8080:80
+# then open: http://localhost:8080   (not https)
 ```
+
+If your Service names the port, `8080:http` is equivalent to `8080:80`.
 
 **Public UI (Helm values in `infra/argocd/values.yaml`):** With **`server.ingress.enabled`** and **`global.domain`** set (e.g. `argo.k8s.michaelj43.dev`), the AWS Load Balancer Controller provisions an internet-facing ALB; **ExternalDNS** creates the hostname in Route 53 once the Ingress has an address. Open **`https://argo.k8s.michaelj43.dev/`** (same ACM / wildcard zone requirements as `docs/aws-domain-tls.md`). Treat **`admin`** as break-glass on the public internet.
 
