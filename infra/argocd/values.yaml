@@ -20,3 +20,11 @@ redisSecretInit:
 
 dex:
   enabled: false
+
+# This repo uses plain Application resources (app-of-apps), not ApplicationSets
+# or notifications. Keep the footprint small for a single t3.small node.
+applicationSet:
+  replicas: 0
+
+notifications:
+  enabled: false

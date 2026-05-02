@@ -91,7 +91,9 @@ jobs:
         if: failure()
         run: |
           kubectl get ns argocd || true
-          kubectl -n argocd get deploy,sts,ds,svc,jobs,pods,events --sort-by='.lastTimestamp' 2>/dev/null | tail -120 || true
+          kubectl -n argocd get deploy,sts,svc,jobs,pods -o wide || true
+          kubectl -n argocd describe pods || true
+          kubectl -n argocd get events --sort-by='.lastTimestamp' || true
           helm status argocd -n argocd 2>/dev/null || true
 
       - name: Apply root app-of-apps
