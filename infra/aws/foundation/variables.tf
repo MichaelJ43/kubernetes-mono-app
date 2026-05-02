@@ -89,8 +89,8 @@ variable "acm_certificate_arn" {
 
 variable "node_instance_types" {
   type        = list(string)
-  default     = ["t3.medium"]
-  description = "EKS managed node instance types. t3.small hits VPC CNI max-pods (~11) with addons + Argo CD on a single node."
+  default     = ["t3.large"]
+  description = "EKS managed node instance types. VPC CNI caps pods per node (~11 small, ~17 medium, ~35 large); addons + Argo CD + Redis/API + CNPG exceed medium on one node."
 }
 
 variable "node_desired_size" {
