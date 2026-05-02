@@ -8,11 +8,13 @@ metadata:
 spec:
   project: default
   ignoreDifferences:
-    # CloudNativePG continuously updates status (and related metadata); Git never matches → perpetual OutOfSync.
+    # CloudNativePG continuously updates status; Git never matches → perpetual OutOfSync.
     - group: postgresql.cnpg.io
       kind: Cluster
       jsonPointers:
         - /status
+        # Cluster created before Git added storageClassName: CNPG often cannot retrofit spec.storage.storageClassName on existing PVCs → live spec omits it.
+        - /spec/storage/storageClassName
   source:
     repoURL: https://github.com/michaelj43/kubernetes-mono-app.git
     targetRevision: main

@@ -19,7 +19,7 @@ Bootstrap-time installs (`infra/argocd/`) are **not** auto-synced from this repo
 Sync waves (see annotations):
 
 - `-2` — CNPG operator (CRDs / controller)
-- `0` — Redis (Bitnami Helm; images pulled via **`public.ecr.aws`** to avoid Docker Hub rate limits)
+- `0` — Redis (Bitnami Helm; **`public.ecr.aws`** + **`global.security.allowInsecureImages`** required by chart when registry ≠ Docker Hub)
 - `1` — Postgres `Cluster` (expects EBS CSI `StorageClass` **`portfolio-gp3`** from `deploy/base/postgres`)
 - `2` — API (expects DB secret `portfolio-db-app` and Redis service)
 
