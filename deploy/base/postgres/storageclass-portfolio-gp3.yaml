@@ -1,0 +1,12 @@
+# EKS often has no default StorageClass until one is defined. Without it, CNPG PVCs
+# stay Pending and the Cluster never creates portfolio-db-app — API CrashLoopBackOff.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: portfolio-gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

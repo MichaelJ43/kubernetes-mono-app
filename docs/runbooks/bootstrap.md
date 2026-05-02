@@ -41,11 +41,13 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath='{.data.password}' | base64 -d
 ```
 
-Port-forward UI (default: secure `ClusterIP`):
+Port-forward UI (when ingress is disabled):
 
 ```bash
 kubectl -n argocd port-forward svc/argocd-server 8080:443
 ```
+
+**Public UI (Helm values in `infra/argocd/values.yaml`):** With **`server.ingress.enabled`** and **`global.domain`** set (e.g. `argo.k8s.michaelj43.dev`), the AWS Load Balancer Controller provisions an internet-facing ALB; **ExternalDNS** creates the hostname in Route 53 once the Ingress has an address. Open **`https://argo.k8s.michaelj43.dev/`** (same ACM / wildcard zone requirements as `docs/aws-domain-tls.md`). Treat **`admin`** as break-glass on the public internet.
 
 ## 4. Verify workloads
 

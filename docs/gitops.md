@@ -20,7 +20,7 @@ Sync waves (see annotations):
 
 - `-2` — CNPG operator (CRDs / controller)
 - `0` — Redis (namespace + cache)
-- `1` — Postgres `Cluster`
+- `1` — Postgres `Cluster` (expects EBS CSI `StorageClass` **`portfolio-gp3`** from `deploy/base/postgres`)
 - `2` — API (expects DB secret `portfolio-db-app` and Redis service)
 
 ## Replacing `repoURL`
