@@ -20,6 +20,10 @@ spec:
           imageRegistry: public.ecr.aws
           security:
             allowInsecureImages: true
+        # Chart defaults set image.registry: docker.io; Helm merge keeps that, so global.imageRegistry alone
+        # does not switch pulls — must override the root image registry (common.images.image).
+        image:
+          registry: public.ecr.aws
         architecture: standalone
         auth:
           enabled: false
