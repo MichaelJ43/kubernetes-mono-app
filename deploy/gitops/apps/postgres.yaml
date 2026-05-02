@@ -7,6 +7,12 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: default
+  ignoreDifferences:
+    # CloudNativePG continuously updates status (and related metadata); Git never matches → perpetual OutOfSync.
+    - group: postgresql.cnpg.io
+      kind: Cluster
+      jsonPointers:
+        - /status
   source:
     repoURL: https://github.com/michaelj43/kubernetes-mono-app.git
     targetRevision: main
