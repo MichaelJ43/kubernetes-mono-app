@@ -42,6 +42,8 @@ If your **public hosted zone** for `k8s.michaelj43.dev` lives in **Route 53** (w
 
 After Argo has synced the API Ingress, allow a short interval for ExternalDNS to reconcile (chart default loop ~1m). No second Terraform apply is required for the API DNS record.
 
+The same pattern applies to **Argo CD** when **`infra/argocd/values.yaml`** enables **`server.ingress`** with **`global.domain: argo.k8s.michaelj43.dev`** — reconcile Helm (`terraform apply` workflow or `helm upgrade`), then **`kubectl -n argocd get ingress`** for the ALB hostname; **ExternalDNS** picks up Ingresses cluster-wide and can publish **`argo.k8s…`** automatically.
+
 **Manual alternative (no ExternalDNS):** create an **alias** (or CNAME) record `api.k8s.michaelj43.dev` → the ALB DNS name from `kubectl -n portfolio get ingress api`.
 
 **Argo:** the **`api`** app syncs **`deploy/base/api`**. Optional **`deploy/overlays/aws-prod`** wraps the same base without adding ACM annotations.

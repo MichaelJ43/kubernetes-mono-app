@@ -1,8 +1,29 @@
+global:
+  domain: argo.k8s.michaelj43.dev
+
+configs:
+  params:
+    # TLS terminates on the ALB; ACM discovery matches global.domain (see docs/aws-domain-tls.md).
+    server.insecure: true
+
 server:
   service:
     type: ClusterIP
   ingress:
-    enabled: false
+    enabled: true
+    controller: aws
+    ingressClassName: alb
+    tls: true
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/backend-protocol: HTTP
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}, {"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    aws:
+      serviceType: ClusterIP
+      backendProtocolVersion: GRPC
 
 controller:
   replicas: 1
