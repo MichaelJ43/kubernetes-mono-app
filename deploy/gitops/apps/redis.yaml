@@ -15,8 +15,11 @@ spec:
       releaseName: redis
       values: |
         # Avoid Docker Hub pulls (anonymous rate limits → ImagePullBackOff). Bitnami mirrors on ECR Public.
+        # Charts ≥ security gate require explicit opt-in when registry ≠ docker.io (see bitnami/charts#30850).
         global:
           imageRegistry: public.ecr.aws
+          security:
+            allowInsecureImages: true
         architecture: standalone
         auth:
           enabled: false
