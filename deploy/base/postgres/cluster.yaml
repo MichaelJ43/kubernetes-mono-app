@@ -2,6 +2,8 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: portfolio-db
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   instances: 1
   primaryUpdateStrategy: unsupervised

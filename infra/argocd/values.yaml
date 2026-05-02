@@ -5,6 +5,8 @@ configs:
   params:
     # TLS terminates on the ALB; ACM discovery matches global.domain (see docs/aws-domain-tls.md).
     server.insecure: true
+    # External URL so the UI / redirects match the hostname (not localhost).
+    server.url: https://argo.k8s.michaelj43.dev
 
 server:
   service:
@@ -13,7 +15,12 @@ server:
     enabled: true
     controller: aws
     ingressClassName: alb
-    tls: true
+    # tls: true adds secretName argocd-server-tls (passthrough-style); that secret is not created when
+    # server.insecure is true — Ingress/ALB reconciliation breaks. Use extraTls hosts-only like API Ingress.
+    tls: false
+    extraTls:
+      - hosts:
+          - argo.k8s.michaelj43.dev
     annotations:
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/target-type: ip
