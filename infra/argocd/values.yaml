@@ -22,7 +22,7 @@ dex:
   enabled: false
 
 # This repo uses plain Application resources (app-of-apps), not ApplicationSets
-# or notifications. Keep the footprint small for a single t3.small node.
+# or notifications. Keep the footprint small for a single modest node (default t3.medium).
 applicationSet:
   replicas: 0
 
