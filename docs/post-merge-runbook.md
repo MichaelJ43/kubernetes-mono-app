@@ -79,7 +79,9 @@ Prefer **ExternalDNS** from **`k8s_platform`**: set **`TF_ROUTE53_HOSTED_ZONE_ID
 ```bash
 kubectl get applications -n argocd
 kubectl -n portfolio get pods,ingress
-curl -fsS https://api.k8s.michaelj43.dev/health   # host from your Ingress
+curl -fsS https://api.k8s.michaelj43.dev/health   # API Ingress
+curl -fsS https://k8s.michaelj43.dev/health       # portal (after CI pushed portal image + Argo synced)
+open https://k8s.michaelj43.dev/status            # Argo app names / health / sync (public)
 ```
 
 ## 9. If something fails
