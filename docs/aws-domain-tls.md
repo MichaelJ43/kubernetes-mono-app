@@ -67,6 +67,7 @@ In `infra/aws/foundation`, either set **`acm_certificate_arn`** (e.g. repository
 | Wrong cert / TLS error | ACM cert in **same region** as ALB; hostname in Ingress matches cert SANs; only one good match or use explicit ARN in a non-public path |
 | Discovery finds no cert | `spec.tls.hosts` / rule `host` aligned with ACM; cert **ISSUED** in same account/region |
 | **api…** does not resolve | **`TF_ROUTE53_HOSTED_ZONE_ID`** set and **k8s_platform** applied; Ingress has ALB hostname in status; `kubectl -n kube-system logs deploy/external-dns` |
+| **argo…** UI does not load / TLS broken | **`helm -f infra/argocd/values.yaml`** uses **`tls: false`** + **`extraTls` hosts only** (not **`tls: true`**, which requires **`argocd-server-tls`**); `kubectl -n argocd describe ingress`; ALB target health **`/healthz`** |
 
 ## Renewal
 

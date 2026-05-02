@@ -49,6 +49,8 @@ kubectl -n argocd port-forward svc/argocd-server 8080:443
 
 **Public UI (Helm values in `infra/argocd/values.yaml`):** With **`server.ingress.enabled`** and **`global.domain`** set (e.g. `argo.k8s.michaelj43.dev`), the AWS Load Balancer Controller provisions an internet-facing ALB; **ExternalDNS** creates the hostname in Route 53 once the Ingress has an address. Open **`https://argo.k8s.michaelj43.dev/`** (same ACM / wildcard zone requirements as `docs/aws-domain-tls.md`). Treat **`admin`** as break-glass on the public internet.
 
+Use **`server.ingress.tls: false`** and **`extraTls`** with **hosts only** (no `secretName`) so ACM certificate discovery works like the API Ingress — **`tls: true`** expects **`argocd-server-tls`**, which breaks TLS-at-ALB when **`server.insecure`** is set.
+
 ## 4. Verify workloads
 
 In Argo CD (or `kubectl`):
