@@ -3,16 +3,16 @@
 ## End-to-end flow
 
 ```text
-Internet → Route 53 (k8s.michaelj43.dev) → ALB (TLS via ACM)
-        → AWS Load Balancer Controller → Ingress `api`
-        → Service `api` (ClusterIP) → Pods (Go API)
+Internet → Route 53 → ALB(s) (TLS via ACM)
+        → Ingress `portal` (apex `k8s.michaelj43.dev`) → Service `portal` → landing + `/status` (reads Argo Application CRs)
+        → Ingress `api` (`api.k8s…`) → Service `api` → Go API
         → CloudNativePG `Cluster` `portfolio-db` (PostgreSQL)
-        → Redis — Docker Official image (cache, in-cluster; `deploy/base/redis`)
+        → Redis — Docker Official image (`deploy/base/redis`)
 ```
 
 Git is the **source of truth** for the workload: Argo CD reads `deploy/gitops/` and applies child `Application` objects, which in turn sync Helm/Kustomize paths in this mono-repo.
 
-GitHub Actions builds and publishes the **container image** (`ci.yaml` on `main`). Argo CD deploys that image tag via Kustomize (**`deploy/base/api`**; optional **`deploy/overlays/aws-prod`** wraps the same base).
+GitHub Actions builds and publishes **API** and **portal** images (`ci.yaml` on `main`). Argo CD deploys tags via Kustomize (**`deploy/base/api`**, **`deploy/base/portal`**; optional **`deploy/overlays/aws-prod`** wraps the API base).
 
 ## Failure domains
 

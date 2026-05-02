@@ -17,6 +17,8 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 | `infra/aws/k8s_platform` | Terraform: Helm `aws-load-balancer-controller` |
 | `deploy/gitops` | Root `Application` + app-of-apps children |
 | `deploy/base/api` | API Deployment/Service/Ingress; Argo **api** app syncs this path; ALB **certificate discovery** (no ACM ARN in Git) |
+| `deploy/base/portal` | Portal Deployment/Ingress **`k8s.michaelj43.dev`** + **`/status`** (reads Argo `Application` CRs in `argocd`); Argo **portal** app |
+| `apps/portal` | Go HTTP server for landing links + status page |
 | `deploy/overlays/aws-prod` | Optional Kustomize overlay for prod-only patches (defaults to wrapping `base/api` without ACM annotations) |
 | `deploy/base/postgres` | CloudNativePG `Cluster` + namespace |
 | `deploy/base/redis` | Redis Deployment + Service `redis-master` (Docker Official image on ECR Public) |

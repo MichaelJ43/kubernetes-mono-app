@@ -1,0 +1,9 @@
+# Read-only list/get Argo CD Application CRs (portal filters to namespace argocd in code).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: portal-argocd-applications-readonly
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]

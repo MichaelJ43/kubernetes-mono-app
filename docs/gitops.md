@@ -8,13 +8,14 @@ Argo CD is the **continuous reconciler** for everything under the application st
 - **Postgres cluster** CR (`deploy/base/postgres`)
 - **Redis** (Docker Official image via `deploy/base/redis`; Service **`redis-master`** matches API `REDIS_ADDR`)
 - **API** Deployment / Service / `Ingress` (`deploy/base/api`; ALB **certificate discovery** for TLS—see `docs/aws-domain-tls.md`)
+- **Portal** landing + **`/status`** (`deploy/base/portal`; hostname **`k8s.michaelj43.dev`**, lists Argo **Application** names / health / sync via Kubernetes API)
 
 Bootstrap-time installs (`infra/argocd/`) are **not** auto-synced from this repo unless you choose to manage Argo itself via Argo—that is intentionally out of scope for the first pass.
 
 ## App of apps
 
 1. **Manual / CI step:** `kubectl apply -f deploy/gitops/root-app.yaml` (also run by `argocd-bootstrap` workflow).
-2. Root `Application` watches **`deploy/gitops/apps/`** and creates one `Application` CR per file (cnpg, postgres, redis, api).
+2. Root `Application` watches **`deploy/gitops/apps/`** and creates one `Application` CR per file (cnpg, postgres, redis, api, portal).
 
 Sync waves (see annotations):
 
@@ -22,6 +23,7 @@ Sync waves (see annotations):
 - `0` — Redis (`deploy/base/redis`; **`public.ecr.aws/docker/library/redis`** — no Bitnami chart)
 - `1` — Postgres `Cluster` (expects EBS CSI `StorageClass` **`portfolio-gp3`** from `deploy/base/postgres`)
 - `2` — API (expects DB secret `portfolio-db-app` and Redis service)
+- `3` — Portal (Ingress **`k8s.michaelj43.dev`**; needs **`portal`** image on GHCR from CI)
 
 ## Migrating off Bitnami Redis
 
