@@ -57,7 +57,7 @@ Optional convenience:
 
 | Name | Example | Notes |
 |------|---------|-------|
-| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | **Required for automatic workload rollout after image push.** When set on **main**, **`ci.yaml`**’s **`rollout`** job (after **`image`**) assumes **`AWS_DEPLOY_ROLE_ARN`**, applies **`deploy/base/portal`** and **`deploy/base/api`** with **`kubectl apply -k`**, then **`kubectl rollout restart`** for **`portal`** and **`api`** in **`portfolio`**. Omit if you only deploy via laptop or Argo and accept **`kubectl rollout restart`** manually after app-only merges. |
+| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | **Optional EKS apply after each main image build.** When set, **`ci.yaml`**’s **`rollout`** job (after **`pin-images`**) assumes **`AWS_DEPLOY_ROLE_ARN`**, **`kubectl apply -k`** on **`deploy/base/portal`** and **`deploy/base/api`**, then waits for rollouts. **`pin-images`** commits Kustomize tags to the **`github.sha`** that was just built so Argo CD sees a real manifest diff; **`rollout`** checks out latest **`main`** (including that pin commit) before applying. Omit if you rely on Argo only or apply from your laptop. |
 | **`EKS_AWS_REGION`** | `us-east-1` | Region passed to **`aws eks update-kubeconfig`**. Defaults to **`us-east-1`** when unset. |
 
 ## First-time chicken-and-egg
@@ -94,11 +94,15 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 - **ACM private keys** — not used; ACM holds the cert.
 - **Terraform state** — in **S3**; lock in **DynamoDB** (you manage those resources outside this list).
 
-## CI image push
+## CI image push and deploy pins
 
-**`ci.yaml`** uses the repo’s **`GITHUB_TOKEN`** automatically (no extra secret) with **`permissions: packages: write`** to push to GHCR.
+**`ci.yaml`** uses the repo’s **`GITHUB_TOKEN`** with **`packages: write`** to push to GHCR.
 
-On **`main`**, after **`portal`** and **`api`** images are pushed, an optional **`rollout`** job runs when **`EKS_CLUSTER_NAME`** is set (see **Variables** above): it applies the same **`deploy/base/**`** kustomizations Argo uses, then **`kubectl rollout restart`** so **`portfolio`** picks up the new **`…:latest`** digest (Deployments use **`imagePullPolicy: Always`**).
+On **`main`**, after **`api`** and **`portal`** images are tagged with **`${{ github.sha }}`** (and **`latest`**), the **`pin-images`** job runs **`kustomize edit set image`** on **`deploy/base/portal`** and **`deploy/base/api`** so **`images[].newTag`** matches that SHA, then commits and pushes to **`main`** (message includes **`[skip ci]`** so the push does not start a second workflow). Argo CD (and anyone diffing Git) therefore sees an explicit image reference change on every image-bearing merge, which triggers a normal Deployment rollout without relying on **`kubectl rollout restart`**.
+
+**Repository setting:** under **Settings → Actions → General → Workflow permissions**, choose **Read and write** if **`pin-images`** should be allowed to push; otherwise the commit step fails and tags stay on **`latest`**.
+
+An optional **`rollout`** job still runs when **`EKS_CLUSTER_NAME`** is set (see **Variables** above); it **`git fetch`** / **`checkout origin/main`** before **`kubectl apply -k`** so it applies the same pinned manifests as Argo.
 
 ## Troubleshooting: Terraform plan + OIDC (“Could not load credentials”)
 
