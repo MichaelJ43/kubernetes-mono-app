@@ -77,11 +77,58 @@ jobs:
             ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/portal:${{ github.sha }}
             ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/portal:latest
 
-  # Argo CD only reapplies when Git manifests change. App-only merges keep the same
-  # `image: …:latest` string, so pods are not recreated. After GHCR push, restart
-  # workloads once so nodes pull the new digest (see imagePullPolicy: Always).
-  rollout:
+  # Pin Kustomize image tags to this commit's SHA so Git (and Argo CD) sees a manifest
+  # diff on every image-bearing merge. The deploy commit uses [skip ci] to avoid a
+  # redundant workflow run; optional rollout still runs in the same workflow.
+  pin-images:
     needs: [image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install kustomize
+        env:
+          KUSTOMIZE_VERSION: 5.4.3
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | sudo tar xzf - -C /usr/local/bin
+
+      - name: GHCR image path (lowercase — required by OCI)
+        id: ghcr
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Pin portal and api tags to ${{ github.sha }}
+        env:
+          SHA: ${{ github.sha }}
+          OWNER: ${{ steps.ghcr.outputs.owner }}
+        run: |
+          set -euo pipefail
+          IMG="ghcr.io/${OWNER}/kubernetes-mono-app"
+          (cd deploy/base/portal && kustomize edit set image "${IMG}/portal=${IMG}/portal:${SHA}")
+          (cd deploy/base/api && kustomize edit set image "${IMG}/api=${IMG}/api:${SHA}")
+
+      - name: Commit and push if Kustomize tags changed
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/base/portal/kustomization.yaml deploy/base/api/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "Kustomize image tags already pinned to ${SHA}."
+          else
+            git commit -m "chore(deploy): pin portal/api images to ${SHA} [skip ci]"
+            git push
+          fi
+
+  rollout:
+    needs: [pin-images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.EKS_CLUSTER_NAME != ''
     environment: deploy
     runs-on: ubuntu-latest
@@ -90,6 +137,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Catch up to latest main (includes deploy pin from pin-images)
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main
 
       - name: Require AWS deploy role secret
         env:
@@ -111,7 +166,7 @@ jobs:
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 
-      - name: Apply manifests and restart workloads
+      - name: Apply manifests (pinned image tags trigger rollouts)
         env:
           CLUSTER: ${{ vars.EKS_CLUSTER_NAME }}
           REGION: ${{ vars.EKS_AWS_REGION }}
@@ -121,6 +176,5 @@ jobs:
           aws eks update-kubeconfig --name "$CLUSTER" --region "$R"
           kubectl apply -k deploy/base/portal
           kubectl apply -k deploy/base/api
-          kubectl rollout restart deployment/portal deployment/api -n portfolio
           kubectl rollout status deployment/portal -n portfolio --timeout=180s
           kubectl rollout status deployment/api -n portfolio --timeout=180s

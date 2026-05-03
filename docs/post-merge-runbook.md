@@ -56,7 +56,7 @@ If you change the hostname, edit **`deploy/base/api/ingress.yaml`** (`spec.tls.h
 
 ## 5. Image on GHCR
 
-Merge or push to **`main`** so **[`ci.yaml`](../.github/workflows/ci.yaml)** runs tests and **pushes** `ghcr.io/<lowercase-owner>/kubernetes-mono-app/api:latest`.
+Merge or push to **`main`** so **[`ci.yaml`](../.github/workflows/ci.yaml)** runs tests, **pushes** `ghcr.io/<lowercase-owner>/kubernetes-mono-app/{api,portal}:<sha>` (and `:latest`), then **`pin-images`** commits **`deploy/base/*/kustomization.yaml`** so **`images[].newTag`** is that **`<sha>`** (requires **Actions → Workflow permissions → Read and write** so the workflow can push).
 
 If the package is **private**, configure pull access (e.g. `imagePullSecrets` / GHCR PAT) — see [`runbooks/bootstrap.md`](runbooks/bootstrap.md).
 
