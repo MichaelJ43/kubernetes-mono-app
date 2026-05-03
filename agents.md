@@ -5,7 +5,7 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 ## Boundaries
 
 - **Terraform** (see `infra/aws/`) owns **account/region** resources: VPC, EKS, cluster addons, AWS Load Balancer Controller (Helm in `k8s_platform` stack), and **GitHub OIDC** IAM roles. **Argo CD** owns **Kubernetes application** state under `deploy/gitops/`. See `docs/github-actions.md` for GitHub Secrets/Variables.
-- **GitHub Actions** owns **CI** (build/test/image) and **lifecycle** workflows (Argo bootstrap/teardown)—see `.github/workflows/`.
+- **GitHub Actions** owns **CI** (build/test/image, optional EKS rollout after push to **`main`**) and **lifecycle** workflows (Argo bootstrap/teardown)—see `.github/workflows/` and **`docs/github-actions.md`** (**`EKS_CLUSTER_NAME`**).
 - **Secrets** must not be committed in plaintext. Examples: copy patterns from docs; use External Secrets, Sealed Secrets, or manual one-time `kubectl` creation as described in `plan.md` §4.4.
 
 ## Layout (high signal)
