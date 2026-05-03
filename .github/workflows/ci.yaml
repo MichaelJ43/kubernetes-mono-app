@@ -76,3 +76,51 @@ jobs:
           tags: |
             ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/portal:${{ github.sha }}
             ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/portal:latest
+
+  # Argo CD only reapplies when Git manifests change. App-only merges keep the same
+  # `image: …:latest` string, so pods are not recreated. After GHCR push, restart
+  # workloads once so nodes pull the new digest (see imagePullPolicy: Always).
+  rollout:
+    needs: [image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.EKS_CLUSTER_NAME != ''
+    environment: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AWS deploy role secret
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ARN" ]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not set (deploy environment). See docs/github-actions.md."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.EKS_AWS_REGION != '' && vars.EKS_AWS_REGION || 'us-east-1' }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Apply manifests and restart workloads
+        env:
+          CLUSTER: ${{ vars.EKS_CLUSTER_NAME }}
+          REGION: ${{ vars.EKS_AWS_REGION }}
+        run: |
+          set -euo pipefail
+          R="${REGION:-us-east-1}"
+          aws eks update-kubeconfig --name "$CLUSTER" --region "$R"
+          kubectl apply -k deploy/base/portal
+          kubectl apply -k deploy/base/api
+          kubectl rollout restart deployment/portal deployment/api -n portfolio
+          kubectl rollout status deployment/portal -n portfolio --timeout=180s
+          kubectl rollout status deployment/api -n portfolio --timeout=180s

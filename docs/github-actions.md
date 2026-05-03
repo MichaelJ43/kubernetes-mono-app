@@ -53,11 +53,12 @@ If you previously set **`TF_FOUNDATION_STATE_KEY`** or **`TF_K8S_PLATFORM_STATE_
 
 **Local applies:** use the same pattern in `backend.hcl` / `-backend-config` / `-var foundation_state_key=…` (see `infra/aws/examples/`).
 
-Optional convenience (not read by workflows today):
+Optional convenience:
 
 | Name | Example | Notes |
 |------|---------|-------|
-| **`EKS_CLUSTER_NAME`** | `k8s-mono` | Should match `cluster_name` in `infra/aws/foundation` — document only; bootstrap workflow still asks for cluster name unless you extend the workflow. |
+| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | **Required for automatic workload rollout after image push.** When set on **main**, **`ci.yaml`**’s **`rollout`** job (after **`image`**) assumes **`AWS_DEPLOY_ROLE_ARN`**, applies **`deploy/base/portal`** and **`deploy/base/api`** with **`kubectl apply -k`**, then **`kubectl rollout restart`** for **`portal`** and **`api`** in **`portfolio`**. Omit if you only deploy via laptop or Argo and accept **`kubectl rollout restart`** manually after app-only merges. |
+| **`EKS_AWS_REGION`** | `us-east-1` | Region passed to **`aws eks update-kubeconfig`**. Defaults to **`us-east-1`** when unset. |
 
 ## First-time chicken-and-egg
 
@@ -96,6 +97,8 @@ The **GitHub OIDC IAM roles** (at least `github_actions_terraform_role_arn`, and
 ## CI image push
 
 **`ci.yaml`** uses the repo’s **`GITHUB_TOKEN`** automatically (no extra secret) with **`permissions: packages: write`** to push to GHCR.
+
+On **`main`**, after **`portal`** and **`api`** images are pushed, an optional **`rollout`** job runs when **`EKS_CLUSTER_NAME`** is set (see **Variables** above): it applies the same **`deploy/base/**`** kustomizations Argo uses, then **`kubectl rollout restart`** so **`portfolio`** picks up the new **`…:latest`** digest (Deployments use **`imagePullPolicy: Always`**).
 
 ## Troubleshooting: Terraform plan + OIDC (“Could not load credentials”)
 
