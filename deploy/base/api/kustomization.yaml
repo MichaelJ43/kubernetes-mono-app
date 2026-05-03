@@ -2,8 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: portfolio
 resources:
-  - deployment.yaml
-  - ingress.yaml
+- deployment.yaml
+- ingress.yaml
 images:
-  - name: ghcr.io/michaelj43/kubernetes-mono-app/api
-    newTag: latest
+- name: ghcr.io/michaelj43/kubernetes-mono-app/api
+  newName: ghcr.io/michaelj43/kubernetes-mono-app/api
+  newTag: fcfc60c5244b91484f3011a6cf0a69996e62b27c
