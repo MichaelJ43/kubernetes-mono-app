@@ -29,32 +29,42 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="robots" content="noindex"/>
   <title>k8s.michaelj43.dev</title>
-  <style>
-    :root { color-scheme: dark light; font-family: system-ui, sans-serif; }
-    body { max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
-    h1 { font-size: 1.35rem; }
-    ul { padding-left: 1.2rem; }
-    a { color: #2563eb; }
-    @media (prefers-color-scheme: dark) { a { color: #93c5fd; } }
-    .muted { color: #64748b; font-size: 0.9rem; }
-    nav { margin-top: 1.5rem; }
-  </style>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-tokens.css"/>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-shell.css"/>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-primitives.css"/>
 </head>
-<body>
-  <h1>Portfolio cluster</h1>
-  <p class="muted">Gateway host for the mono-app stack (Terraform + EKS + Argo CD).</p>
-  <p>Sample API (HTTPS):</p>
-  <ul>
-    <li><a href="{{.APIBase}}/health"><code>/health</code></a> — liveness</li>
-    <li><a href="{{.APIBase}}/ready"><code>/ready</code></a> — readiness (Postgres + Redis)</li>
-    <li><a href="{{.APIBase}}/version"><code>/version</code></a> — build/version</li>
-    <li><a href="{{.APIBase}}/items"><code>/items</code></a> — DB-backed list</li>
-    <li><a href="{{.APIBase}}/cache-demo"><code>/cache-demo</code></a> — Redis cache demo</li>
-  </ul>
-  <nav>
-    <a href="/status">Argo CD application status</a>
-  </nav>
+<body class="m43 m43-page">
+  <div data-m43-auth-header></div>
+  <div class="m43-page__body m43">
+    <header class="m43-site-header">
+      <h1>Portfolio cluster</h1>
+      <p class="m43-intro">Gateway host for the mono-app stack (Terraform + EKS + Argo CD).</p>
+    </header>
+    <main class="m43-main">
+      <p class="m43-section-title">Sample API (HTTPS)</p>
+      <ul class="m43-intro" style="margin-top:0">
+        <li><a href="{{.APIBase}}/health"><code>/health</code></a> — liveness</li>
+        <li><a href="{{.APIBase}}/ready"><code>/ready</code></a> — readiness (Postgres + Redis)</li>
+        <li><a href="{{.APIBase}}/version"><code>/version</code></a> — build/version</li>
+        <li><a href="{{.APIBase}}/items"><code>/items</code></a> — DB-backed list</li>
+        <li><a href="{{.APIBase}}/cache-demo"><code>/cache-demo</code></a> — Redis cache demo</li>
+        <li><a href="{{.APIBase}}/v1/sample-protected"><code>/v1/sample-protected</code></a> — requires shared-platform login (<code>sap_session</code>); server delegates to <code>api.michaelj43.dev/v1/auth/me</code></li>
+      </ul>
+      <nav class="m43-nav" aria-label="Site">
+        <a href="/status">Argo CD application status</a>
+      </nav>
+    </main>
+  </div>
+  <script src="https://static.michaelj43.dev/v1/m43-analytics.js" defer
+    data-m43-app="k8s-portal-home"
+    data-m43-api="https://api.michaelj43.dev"></script>
+  <script src="https://static.michaelj43.dev/v1/m43-auth-header.js" defer
+    data-m43-auth
+    data-m43-api="https://api.michaelj43.dev"
+    data-m43-auth-origin="https://auth.michaelj43.dev"
+    data-m43-home-url="https://k8s.michaelj43.dev/"></script>
 </body>
 </html>`))
 
@@ -63,36 +73,43 @@ var statusTmpl = template.Must(template.New("status").Parse(`<!DOCTYPE html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Argo CD status</title>
-  <style>
-    :root { color-scheme: dark light; font-family: system-ui, sans-serif; }
-    body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
-    h1 { font-size: 1.35rem; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.95rem; }
-    th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid #cbd5e1; }
-    th { font-weight: 600; }
-    .muted { color: #64748b; font-size: 0.9rem; }
-    a { color: #2563eb; }
-    @media (prefers-color-scheme: dark) {
-      th, td { border-color: #334155; }
-      a { color: #93c5fd; }
-    }
-  </style>
+  <meta name="robots" content="noindex"/>
+  <title>Argo CD status · k8s.michaelj43.dev</title>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-tokens.css"/>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-shell.css"/>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-primitives.css"/>
 </head>
-<body>
-  <h1>Argo CD applications</h1>
-  <p class="muted">Namespaced Applications in <code>argocd</code> — only application name, health, and sync status (via Kubernetes API).</p>
-  <p><a href="/">← Home</a></p>
-  <table>
-    <thead><tr><th>Name</th><th>Health</th><th>Sync</th></tr></thead>
-    <tbody>
-      {{range .Rows}}
-      <tr><td>{{.Name}}</td><td>{{.Health}}</td><td>{{.Sync}}</td></tr>
-      {{else}}
-      <tr><td colspan="3" class="muted">No applications found.</td></tr>
-      {{end}}
-    </tbody>
-  </table>
+<body class="m43 m43-page">
+  <div data-m43-auth-header></div>
+  <div class="m43-page__body m43">
+    <header class="m43-site-header">
+      <h1>Argo CD applications</h1>
+      <p class="m43-intro">Namespaced Applications in <code>argocd</code> — application name, health, and sync status (via Kubernetes API).</p>
+      <nav class="m43-nav" aria-label="Site">
+        <a href="/">Home</a>
+      </nav>
+    </header>
+    <main class="m43-main">
+      <table class="m43-table">
+        <thead><tr><th>Name</th><th>Health</th><th>Sync</th></tr></thead>
+        <tbody>
+          {{range .Rows}}
+          <tr><td>{{.Name}}</td><td>{{.Health}}</td><td>{{.Sync}}</td></tr>
+          {{else}}
+          <tr><td colspan="3" class="m43-intro">No applications found.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </main>
+  </div>
+  <script src="https://static.michaelj43.dev/v1/m43-analytics.js" defer
+    data-m43-app="k8s-portal-status"
+    data-m43-api="https://api.michaelj43.dev"></script>
+  <script src="https://static.michaelj43.dev/v1/m43-auth-header.js" defer
+    data-m43-auth
+    data-m43-api="https://api.michaelj43.dev"
+    data-m43-auth-origin="https://auth.michaelj43.dev"
+    data-m43-home-url="https://k8s.michaelj43.dev/"></script>
 </body>
 </html>`))
 

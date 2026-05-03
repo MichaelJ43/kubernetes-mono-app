@@ -15,10 +15,12 @@ import (
 )
 
 type Config struct {
-	Version   string
-	Pool      *pgxpool.Pool
-	RedisAddr string
-	RedisPass string
+	Version           string
+	Pool              *pgxpool.Pool
+	RedisAddr         string
+	RedisPass         string
+	SharedAuthAPIBase string
+	HTTPClient        *http.Client
 }
 
 type Server struct {
@@ -27,10 +29,22 @@ type Server struct {
 	pool         *pgxpool.Pool
 	redis        *redis.Client
 	redisEnabled bool
+	authAPIBase  string
+	httpClient   *http.Client
 }
 
 func New(log *slog.Logger, cfg Config) *Server {
-	s := &Server{log: log, version: cfg.Version, pool: cfg.Pool}
+	hc := cfg.HTTPClient
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	s := &Server{
+		log:         log,
+		version:     cfg.Version,
+		pool:        cfg.Pool,
+		authAPIBase: cfg.SharedAuthAPIBase,
+		httpClient:  hc,
+	}
 
 	if cfg.RedisAddr != "" {
 		s.redisEnabled = true
@@ -61,6 +75,9 @@ func (s *Server) Router() *chi.Mux {
 	r.Get("/version", s.versionH)
 	r.Get("/items", s.items)
 	r.Get("/cache-demo", s.cacheDemo)
+
+	r.Options("/v1/sample-protected", s.sampleProtectedOptions)
+	r.Get("/v1/sample-protected", s.sampleProtected)
 
 	return r
 }

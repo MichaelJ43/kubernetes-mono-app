@@ -38,3 +38,21 @@ paths:
       responses:
         '200':
           description: OK
+  /v1/sample-protected:
+    get:
+      summary: Demo route gated by shared-api-platform session
+      description: |
+        Forwards the browser Cookie header to GET https://api.michaelj43.dev/v1/auth/me.
+        Returns 401 without a valid sap_session. Credentialed CORS allowed for michaelj43.dev apex hosts.
+      responses:
+        '200':
+          description: JSON includes user from shared auth
+        '401':
+          description: No or invalid session
+        '502':
+          description: Auth upstream error or unreachable
+    options:
+      summary: CORS preflight for sample-protected
+      responses:
+        '204':
+          description: No content
