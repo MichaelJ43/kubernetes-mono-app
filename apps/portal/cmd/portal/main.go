@@ -64,7 +64,7 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
     data-m43-auth
     data-m43-api="https://api.michaelj43.dev"
     data-m43-auth-origin="https://auth.michaelj43.dev"
-    data-m43-home-url="https://k8s.michaelj43.dev/"></script>
+    data-m43-home-url="https://michaelj43.dev/"></script>
 </body>
 </html>`))
 
@@ -109,7 +109,7 @@ var statusTmpl = template.Must(template.New("status").Parse(`<!DOCTYPE html>
     data-m43-auth
     data-m43-api="https://api.michaelj43.dev"
     data-m43-auth-origin="https://auth.michaelj43.dev"
-    data-m43-home-url="https://k8s.michaelj43.dev/"></script>
+    data-m43-home-url="https://michaelj43.dev/"></script>
 </body>
 </html>`))
 
