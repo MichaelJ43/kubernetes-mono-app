@@ -19,12 +19,12 @@ output "configure_kubectl" {
 
 output "github_actions_terraform_role_arn" {
   description = "Typical value for GitHub Actions secret AWS_DEPLOY_ROLE_ARN (from github_deploy stack)."
-  value       = data.terraform_remote_state.github_deploy.outputs.github_actions_terraform_role_arn
+  value       = data.aws_iam_role.github_terraform.arn
 }
 
 output "github_actions_bootstrap_role_arn" {
   description = "Optional narrow GitOps role (if not using a single AWS_DEPLOY_ROLE_ARN)"
-  value       = data.terraform_remote_state.github_deploy.outputs.github_actions_bootstrap_role_arn
+  value       = data.aws_iam_role.github_bootstrap.arn
 }
 
 output "aws_load_balancer_controller_irsa_role_arn" {

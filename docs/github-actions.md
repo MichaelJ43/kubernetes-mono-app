@@ -50,7 +50,7 @@ The deploy role needs **`ssm:GetParameter`** and **`ssm:PutParameter`** on that 
 | **`TF_ROUTE53_HOSTED_ZONE_ID`** | No | Route 53 **hosted zone ID** for your delegated **`k8s.…`** zone. Passed to **`k8s_platform`** (ExternalDNS). Used by **`parked_site`** when **`manage_route53_records`** is true (**`soft-destroy`**, **`aws-full-destroy`**). Required for automated DNS cutover on soft destroy. |
 | **`TF_ACM_CERTIFICATE_ARN`** | Recommended for **`parked_site`** / HTTPS | Issued ACM cert ARN in **`us-east-1`** (same region as this repo’s ALB/CloudFront setup). Reused for **CloudFront** viewer cert and **foundation** output — **no separate CloudFront secret**. |
 
-The **`github_deploy`** Terraform root creates **`github_actions_terraform_role_arn`** and **`github_actions_bootstrap_role_arn`**; **`foundation`** reads that state via remote state and attaches **EKS access entries** only.
+The **`github_deploy`** Terraform root creates the **`…-gha-terraform`** and **`…-gha-bootstrap`** IAM roles; **`foundation`** resolves their ARNs with **`aws_iam_role`** data sources (same naming convention) and attaches **EKS access entries** — no dependency on **`github_deploy`** state existing in S3 for plan or destroy.
 
 If **`AWS_DEPLOY_ROLE_ARN`** is not the Terraform-managed terraform role, **`foundation`** still needs **`TF_VAR_github_actions_deploy_role_arn`** matching that secret so **EKS** grants **`k8s_platform`** Helm access.
 
@@ -67,7 +67,7 @@ Derived from the repository **short name** (`github.event.repository.name`):
 
 **Bootstrap order for a new account / clone**
 
-1. Apply **`github_deploy`** first (locally with backend config, or add a one-off workflow). Until **`github_deploy`** state exists in S3, **`foundation`** cannot plan/apply (remote state).
+1. Apply **`github_deploy`** first (locally with backend config, or **`terraform-apply`**). Until those IAM roles exist (**`<cluster_name>-gha-terraform`** etc.), **`foundation`** cannot plan/apply (it looks up the roles by name).
 2. **`terraform-apply.yaml`** (manual) runs **`github_deploy`** → **`foundation`** → **`k8s_platform`** → Argo CD + root app.
 
 **Migrating from IAM embedded in `foundation`**
@@ -132,7 +132,7 @@ Repository **Actions → General → Workflow permissions** must allow **read an
 
 ## Troubleshooting (subset)
 
-1. **`foundation` plan/apply: remote state for `github_deploy` missing** — Run **`github_deploy`** apply first so the state object exists in the bucket.
+1. **`foundation` plan/apply: GitHub IAM roles missing** — Run **`github_deploy`** apply first so **`…-gha-terraform`** / **`…-gha-bootstrap`** exist (role names use the same **`cluster_name`** as **`foundation`**).
 
 2. **`parked_site` / static deploy: invalid ACM** — CloudFront requires an **ISSUED** cert in **`us-east-1`** covering your **`parked_aliases`**. Reuse **`TF_ACM_CERTIFICATE_ARN`** when it already points at that cert.
 

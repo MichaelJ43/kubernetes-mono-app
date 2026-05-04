@@ -36,7 +36,7 @@ variable "lock_table" {
 
 variable "github_deploy_state_key" {
   type        = string
-  description = "S3 key for github_deploy state (e.g. <repo>/github-deploy/terraform.tfstate)."
+  description = "Unused by foundation (kept for workflow/tfvars compatibility). GitHub role ARNs are read from IAM by name; see **github_deploy** naming."
 }
 
 variable "vpc_cidr" {
