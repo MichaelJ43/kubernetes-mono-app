@@ -1,5 +1,5 @@
-# GitHub Actions: one IAM OIDC provider per AWS account URL (token.actions.githubusercontent.com).
-# Default is reuse (create_github_oidc_provider=false); set true only on a greenfield account.
+# GitHub Actions OIDC and deploy IAM roles (separate from foundation so soft-destroy
+# can tear down EKS/VPC without removing the role GitHub uses for Terraform).
 
 data "tls_certificate" "github" {
   count = var.create_github_oidc_provider ? 1 : 0
@@ -29,8 +29,6 @@ data "aws_iam_openid_connect_provider" "github_existing" {
 }
 
 locals {
-  # GitHub's OIDC "sub" claim is case-sensitive; Actions may emit the owner in a different
-  # casing than var.github_organization (e.g. michaelj43 vs MichaelJ43). Allow both.
   github_oidc_sub_wildcards = distinct([
     "repo:${var.github_organization}/${var.github_repository}:*",
     "repo:${lower(var.github_organization)}/${var.github_repository}:*",
@@ -64,7 +62,6 @@ data "aws_iam_policy_document" "github_actions_trust" {
   }
 }
 
-# Uses AdministratorAccess for portfolio simplicity; scope down for production.
 resource "aws_iam_role" "github_terraform" {
   name               = "${var.cluster_name}-gha-terraform"
   assume_role_policy = data.aws_iam_policy_document.github_actions_trust.json

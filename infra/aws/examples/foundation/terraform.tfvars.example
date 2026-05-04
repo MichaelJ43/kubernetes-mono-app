@@ -4,12 +4,18 @@ github_organization  = "MichaelJ43"
 github_repository    = "kubernetes-mono-app"
 enable_nat_gateway   = false
 
-# If AWS_DEPLOY_ROLE_ARN in GitHub is not the foundation output github_actions_terraform_role_arn,
+# Required for foundation to read github_deploy remote state (same values as S3 backend):
+state_bucket             = "YOUR_STATE_BUCKET"
+state_region             = "us-east-1"
+lock_table               = "YOUR_LOCK_TABLE"
+github_deploy_state_key  = "kubernetes-mono-app/github-deploy/terraform.tfstate"
+
+# If AWS_DEPLOY_ROLE_ARN in GitHub is not the github_deploy output github_actions_terraform_role_arn,
 # match it here so EKS allows Helm (k8s_platform): github_actions_deploy_role_arn = "arn:aws:iam::ACCOUNT:role/YOUR_OIDC_ROLE"
 
-# New AWS account with no GitHub OIDC provider yet: set true once, apply, then you may set false.
+# New AWS account with no GitHub OIDC provider yet: set on github_deploy only:
 # create_github_oidc_provider = true
 
-# Optional: exact issued cert ARN (matches TF_ACM_CERTIFICATE_ARN in GitHub) or domain for data lookup → output acm_certificate_arn (reference only; Ingress uses ALB discovery).
+# Optional: exact issued cert ARN (matches TF_ACM_CERTIFICATE_ARN in GitHub) or domain for data lookup → output acm_certificate_arn
 # acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/…"
 # acm_certificate_domain = "*.k8s.michaelj43.dev"

@@ -1,11 +1,8 @@
 name: Terraform apply
 
-# Applies foundation then k8s_platform (Helm: AWS Load Balancer Controller), then bootstraps Argo CD.
-# Requires: S3 bucket + DynamoDB lock (secrets TF_STATE_BUCKET, TF_LOCK_TABLE; optional TF_STATE_REGION);
-#           state keys are <repo>/foundation/... and <repo>/k8s-platform/... from github.event.repository.name.
-#           IAM role in secret AWS_DEPLOY_ROLE_ARN (same secret as Argo bootstrap/teardown).
-#
-# Runs automatically on push to main only when Terraform / this workflow changes; app deploys stay in GitOps (Argo).
+# Manual only: applies github_deploy (GitHub OIDC IAM) → foundation → k8s_platform, then Argo CD + root app.
+# For S3/CloudFront parked content sync on every merge, use **static-site-deploy** (default on push to main).
+# Requires: S3 bucket + DynamoDB lock; state keys include <repo>/github-deploy/..., foundation, k8s-platform.
 
 on:
   workflow_dispatch:
@@ -14,11 +11,6 @@ on:
         description: Type APPLY to run
         required: true
         type: string
-  push:
-    branches: [main]
-    paths:
-      - "infra/aws/**"
-      - ".github/workflows/terraform-apply.yaml"
 
 permissions:
   id-token: write
@@ -30,16 +22,16 @@ concurrency:
 
 jobs:
   apply:
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'APPLY') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event.inputs.confirm == 'APPLY'
     environment: deploy
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: true
+      STATE_KEY_GITHUB_DEPLOY: ${{ github.event.repository.name }}/github-deploy/terraform.tfstate
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+      CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'k8s-mono' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,6 +58,22 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
 
+      - name: Init & apply github_deploy
+        working-directory: infra/aws/github_deploy
+        env:
+          TF_VAR_github_organization: ${{ github.repository_owner }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_cluster_name: ${{ env.CLUSTER_NAME }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.STATE_KEY_GITHUB_DEPLOY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+          terraform apply -input=false -auto-approve
+
       - name: Init & apply foundation
         working-directory: infra/aws/foundation
         env:
@@ -74,6 +82,10 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_github_deploy_state_key: ${{ env.STATE_KEY_GITHUB_DEPLOY }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
@@ -124,8 +136,6 @@ jobs:
           set -euo pipefail
           helm repo add argo https://argoproj.github.io/argo-helm || true
           helm repo update
-          # The chart's redis-secret-init Job is a pre-install/pre-upgrade Helm hook. A failed CI run can
-          # leave it incomplete; the next upgrade then waits on that hook until Helm times out.
           if kubectl get ns argocd >/dev/null 2>&1; then
             jobs=$(kubectl -n argocd get jobs -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
             for j in ${jobs:-}; do

@@ -1,0 +1,137 @@
+name: Kubernetes images & deploy pin
+
+# Manual workflow: build/push API + portal images to GHCR, pin Kustomize tags to the commit SHA,
+# optionally rollout on EKS when **EKS_CLUSTER_NAME** is set.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  image:
+    environment: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: GHCR image path (lowercase — required by OCI)
+        id: ghcr
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ steps.ghcr.outputs.owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push API
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          push: true
+          tags: |
+            ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/api:${{ github.sha }}
+            ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/api:latest
+      - name: Build and push portal
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/portal
+          push: true
+          tags: |
+            ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/portal:${{ github.sha }}
+            ghcr.io/${{ steps.ghcr.outputs.owner }}/kubernetes-mono-app/portal:latest
+
+  pin-images:
+    needs: [image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install kustomize
+        env:
+          KUSTOMIZE_VERSION: 5.4.3
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | sudo tar xzf - -C /usr/local/bin
+
+      - name: GHCR image path (lowercase — required by OCI)
+        id: ghcr
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Pin portal and api tags to ${{ github.sha }}
+        env:
+          SHA: ${{ github.sha }}
+          OWNER: ${{ steps.ghcr.outputs.owner }}
+        run: |
+          set -euo pipefail
+          IMG="ghcr.io/${OWNER}/kubernetes-mono-app"
+          (cd deploy/base/portal && kustomize edit set image "${IMG}/portal=${IMG}/portal:${SHA}")
+          (cd deploy/base/api && kustomize edit set image "${IMG}/api=${IMG}/api:${SHA}")
+
+      - name: Commit and push if Kustomize tags changed
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/base/portal/kustomization.yaml deploy/base/api/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "Kustomize image tags already pinned to ${SHA}."
+          else
+            git commit -m "chore(deploy): pin portal/api images to ${SHA} [skip ci]"
+            git push
+          fi
+
+  rollout:
+    needs: [pin-images]
+    if: vars.EKS_CLUSTER_NAME != ''
+    environment: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Catch up to latest main (includes deploy pin from pin-images)
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main
+
+      - name: Require AWS deploy role secret
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ARN" ]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not set (deploy environment). See docs/github-actions.md."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.EKS_AWS_REGION || 'us-east-1' }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Apply manifests (pinned image tags trigger rollouts)
+        env:
+          CLUSTER: ${{ vars.EKS_CLUSTER_NAME }}
+          REGION: ${{ vars.EKS_AWS_REGION }}
+        run: |
+          set -euo pipefail
+          R="${REGION:-us-east-1}"
+          aws eks update-kubeconfig --name "$CLUSTER" --region "$R"
+          kubectl apply -k deploy/base/portal
+          kubectl apply -k deploy/base/api
+          kubectl rollout status deployment/portal -n portfolio --timeout=180s
+          kubectl rollout status deployment/api -n portfolio --timeout=180s

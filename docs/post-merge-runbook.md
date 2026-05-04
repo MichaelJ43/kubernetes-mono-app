@@ -11,24 +11,25 @@ Order to go from **merged repo** to **API reachable on your domain** on AWS. Aut
   - Optional: `TF_ROUTE53_HOSTED_ZONE_ID`, `TF_ACM_CERTIFICATE_ARN` (see [`github-actions.md`](github-actions.md))
 - Fork or rename? Update `repoURL` in `deploy/gitops/**/*.yaml` and image references per [`README.md`](../README.md).
 
-## 1. Terraform: foundation
+## 1. Terraform: `github_deploy` then `foundation`
 
-Create VPC, EKS, OIDC roles, EBS CSI, etc.
+**Order:** apply **`infra/aws/github_deploy`** first (GitHub OIDC + IAM deploy roles). **`foundation`** reads that state and creates VPC, EKS, EBS CSI, etc. — it no longer creates the GitHub OIDC roles itself.
 
 **Locally** (see [`infra/aws/README.md`](../infra/aws/README.md)):
 
 ```bash
-cd infra/aws/foundation
-# backend.hcl / tfvars per examples/
-terraform init -backend-config=...
+cd infra/aws/github_deploy
+terraform init -backend-config=...   # key: <repo>/github-deploy/terraform.tfstate
+terraform apply
+
+cd ../foundation
+terraform init -backend-config=...   # key: <repo>/foundation/terraform.tfstate
 terraform apply
 ```
 
-**Or** use **Actions → Terraform apply** after secrets exist (confirm **`APPLY`**), or merge a change under **`infra/aws/`** so the workflow applies automatically (see [`github-actions.md`](github-actions.md)).
+**Or** use **Actions → Terraform apply** after secrets exist (confirm **`APPLY`**) — **manual**; it is not triggered by push to `main` (see [`github-actions.md`](github-actions.md)).
 
-**Copy outputs:** `cluster_name`, `aws_region`, `github_actions_terraform_role_arn` → ensure `AWS_DEPLOY_ROLE_ARN` matches your single deploy role.
-
-Foundation **state object** must exist in S3 before `k8s_platform` can run.
+**Copy outputs:** `github_actions_terraform_role_arn` from **`github_deploy`** (or **`foundation`** re-exports it) → ensure **`AWS_DEPLOY_ROLE_ARN`** matches. Foundation **state object** must exist in S3 before **`k8s_platform`** can run; **`github_deploy`** state must exist before **`foundation`**.
 
 ## 2. Terraform: k8s_platform
 
@@ -40,7 +41,7 @@ terraform init -backend-config=...   # key: <repo>/k8s-platform/terraform.tfstat
 terraform apply
 ```
 
-Or the same **Terraform apply** workflow (runs foundation then k8s_platform, then installs/upgrades Argo CD and applies the root app)—manually or automatically on infra merges to **`main`**.
+Or the same **Terraform apply** workflow (runs **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD + root app) — **manually** via **Actions** (confirm **`APPLY`**).
 
 Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
 
@@ -56,13 +57,17 @@ If you change the hostname, edit **`deploy/base/api/ingress.yaml`** (`spec.tls.h
 
 ## 5. Image on GHCR
 
-Merge or push to **`main`** so **[`ci.yaml`](../.github/workflows/ci.yaml)** runs tests, **pushes** `ghcr.io/<lowercase-owner>/kubernetes-mono-app/{api,portal}:<sha>` (and `:latest`), then **`pin-images`** commits **`deploy/base/*/kustomization.yaml`** so **`images[].newTag`** is that **`<sha>`** (requires **Actions → Workflow permissions → Read and write** so the workflow can push).
+Run **Actions → Kubernetes images & deploy pin** ([`kubernetes-images.yaml`](../.github/workflows/kubernetes-images.yaml)). That workflow **pushes** `ghcr.io/<lowercase-owner>/kubernetes-mono-app/{api,portal}:<sha>` (and `:latest`), then **`pin-images`** commits **`deploy/base/*/kustomization.yaml`** so **`images[].newTag`** is that **`<sha>`** (requires **Actions → Workflow permissions → Read and write** so the workflow can push).
+
+Optional **`rollout`** job runs when repository variable **`EKS_CLUSTER_NAME`** is set.
+
+Push to **`main`** still runs **`ci.yaml`** tests only (no automatic image build).
 
 If the package is **private**, configure pull access (e.g. `imagePullSecrets` / GHCR PAT) — see [`runbooks/bootstrap.md`](runbooks/bootstrap.md).
 
 ## 6. Argo CD bootstrap
 
-The **Terraform apply** workflow now bootstraps Argo CD automatically after a successful deploy: it installs/upgrades Argo (`infra/argocd/values.yaml`), then runs `kubectl apply -f deploy/gitops/root-app.yaml`.
+The **Terraform apply** workflow bootstraps Argo CD after a successful apply of **`k8s_platform`**: it installs/upgrades Argo (`infra/argocd/values.yaml`), then runs `kubectl apply -f deploy/gitops/root-app.yaml`.
 
 Use **Actions → Argo CD bootstrap** (`argocd-bootstrap.yaml`) only for an explicit repair/re-run. Inputs: `cluster_name` and `aws_region` match Terraform outputs.
 

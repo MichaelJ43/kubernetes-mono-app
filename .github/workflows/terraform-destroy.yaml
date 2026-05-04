@@ -28,6 +28,7 @@ jobs:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
+      STATE_KEY_GITHUB_DEPLOY: ${{ github.event.repository.name }}/github-deploy/terraform.tfstate
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +82,10 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_github_deploy_state_key: ${{ env.STATE_KEY_GITHUB_DEPLOY }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \

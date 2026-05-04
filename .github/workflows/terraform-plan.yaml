@@ -29,9 +29,32 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
       - name: Terraform fmt
-        run: terraform fmt -check -recursive infra/aws/foundation infra/aws/k8s_platform
+        run: terraform fmt -check -recursive infra/aws
+      - name: Terraform validate (github_deploy)
+        working-directory: infra/aws/github_deploy
+        env:
+          TF_VAR_github_organization: ci
+          TF_VAR_github_repository: kubernetes-mono-app
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Terraform validate (parked_site)
+        working-directory: infra/aws/parked_site
+        env:
+          TF_VAR_parked_aliases: '["parked.example.dev"]'
+          TF_VAR_acm_certificate_arn: arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000001
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
       - name: Terraform validate (foundation)
         working-directory: infra/aws/foundation
+        env:
+          TF_VAR_aws_region: us-east-1
+          TF_VAR_state_bucket: ci-placeholder
+          TF_VAR_state_region: us-east-1
+          TF_VAR_lock_table: ci-placeholder
+          TF_VAR_github_deploy_state_key: ci-placeholder/terraform.tfstate
+          TF_VAR_github_organization: ci
         run: |
           terraform init -backend=false -input=false
           terraform validate
@@ -50,6 +73,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+      STATE_KEY_GITHUB_DEPLOY: ${{ github.event.repository.name }}/github-deploy/terraform.tfstate
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
@@ -108,6 +132,10 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_github_deploy_state_key: ${{ env.STATE_KEY_GITHUB_DEPLOY }}
         run: terraform plan -input=false -no-color
 
       - name: Foundation state present in S3 (k8s_platform needs remote_state)

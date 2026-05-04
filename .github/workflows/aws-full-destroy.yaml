@@ -1,54 +1,40 @@
-name: Full undeploy
+name: AWS full destroy
 
-# Best-effort stack teardown: optional Argo CD / root Application cleanup, then Terraform
-# destroy (k8s_platform → foundation). Use skip_argo if the cluster is already gone.
+# Best-effort destroy of **k8s_platform**, **foundation**, and **parked_site** (S3/CloudFront).
+# Does **not** destroy **github_deploy** (keeps GitHub OIDC deploy role). Type DELETE to confirm.
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: Type FULL UNDEPLOY to run (destructive)
+        description: Type DELETE to destroy (destructive)
         required: true
         type: string
-      cluster_name:
-        description: EKS cluster name (must match foundation; for kubeconfig / Argo steps)
-        required: true
-        type: string
-      aws_region:
-        description: AWS region of the cluster and Terraform state backend
-        required: true
-        default: us-east-1
-        type: string
-      skip_argo:
-        description: Skip kubectl/Helm (use if cluster API is already unreachable)
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: full-undeploy-${{ github.repository }}
+  group: aws-full-destroy-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  undeploy:
-    if: github.event.inputs.confirm == 'FULL UNDEPLOY'
+  destroy:
+    if: github.event.inputs.confirm == 'DELETE'
     environment: deploy
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
+      STATE_KEY_PARKED: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
       STATE_KEY_GITHUB_DEPLOY: ${{ github.event.repository.name }}/github-deploy/terraform.tfstate
-      # S3 state backend region (often matches TF_STATE_REGION secret); cluster ops use inputs.aws_region
-      TF_BACKEND_REGION: ${{ secrets.TF_STATE_REGION || github.event.inputs.aws_region }}
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Require AWS deploy role and Terraform backend variables
+      - name: Require backend secrets
         env:
           ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           BUCKET: ${{ secrets.TF_STATE_BUCKET }}
@@ -64,38 +50,20 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ inputs.aws_region }}
-
-      - name: Install kubectl & helm (Argo cleanup)
-        if: ${{ !inputs.skip_argo }}
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-      - name: kubeconfig
-        if: ${{ !inputs.skip_argo }}
-        run: aws eks update-kubeconfig --name "${{ inputs.cluster_name }}" --region "${{ inputs.aws_region }}"
-
-      - name: Delete root Application (app-of-apps)
-        if: ${{ !inputs.skip_argo }}
-        run: kubectl delete -f deploy/gitops/root-app.yaml --ignore-not-found
-
-      - name: Uninstall Argo CD
-        if: ${{ !inputs.skip_argo }}
-        run: helm uninstall argocd -n argocd --wait || true
+          aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
           terraform_wrapper: false
 
-      - name: Destroy k8s_platform (Helm / AWS LB controller)
+      - name: Destroy k8s_platform
+        continue-on-error: true
         working-directory: infra/aws/k8s_platform
         env:
-          TF_VAR_aws_region: ${{ inputs.aws_region }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
-          TF_VAR_state_region: ${{ inputs.aws_region }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
           TF_VAR_foundation_state_key: ${{ env.STATE_KEY_FOUNDATION }}
           TF_VAR_external_dns_route53_zone_id: ${{ secrets.TF_ROUTE53_HOSTED_ZONE_ID }}
@@ -103,28 +71,48 @@ jobs:
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_K8S_PLATFORM }}" \
-            -backend-config="region=${{ env.TF_BACKEND_REGION }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
           terraform destroy -input=false -auto-approve
 
-      - name: Destroy foundation (VPC / EKS)
+      - name: Destroy foundation
+        continue-on-error: true
         working-directory: infra/aws/foundation
         env:
           TF_VAR_github_organization: ${{ github.repository_owner }}
           TF_VAR_github_repository: ${{ github.event.repository.name }}
-          TF_VAR_aws_region: ${{ inputs.aws_region }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
-          TF_VAR_state_region: ${{ env.TF_BACKEND_REGION }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
           TF_VAR_github_deploy_state_key: ${{ env.STATE_KEY_GITHUB_DEPLOY }}
         run: |
           terraform init -input=false \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=${{ env.STATE_KEY_FOUNDATION }}" \
-            -backend-config="region=${{ env.TF_BACKEND_REGION }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+          terraform destroy -input=false -auto-approve
+
+      - name: Destroy parked_site
+        continue-on-error: true
+        working-directory: infra/aws/parked_site
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
+          TF_VAR_parked_aliases: '["k8s.michaelj43.dev","api.k8s.michaelj43.dev"]'
+          TF_VAR_route53_zone_id: ${{ secrets.TF_ROUTE53_HOSTED_ZONE_ID }}
+          TF_VAR_manage_route53_records: "true"
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.STATE_KEY_PARKED }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
           terraform destroy -input=false -auto-approve
