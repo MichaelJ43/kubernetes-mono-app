@@ -19,14 +19,24 @@ variable "cluster_version" {
   EOT
 }
 
-variable "create_github_oidc_provider" {
-  type        = bool
-  default     = false
-  description = <<-EOT
-    If true, Terraform creates the IAM OIDC provider for https://token.actions.githubusercontent.com.
-    AWS allows only one per account. Set true on the first apply in a new account that has no GitHub OIDC provider yet.
-    If you already use GitHub Actions OIDC in this account (common), leave false so Terraform reuses the existing provider.
-  EOT
+variable "state_bucket" {
+  type        = string
+  description = "S3 bucket for Terraform state (must match backend; used to read github_deploy remote state)."
+}
+
+variable "state_region" {
+  type        = string
+  description = "Region of the state bucket and lock table."
+}
+
+variable "lock_table" {
+  type        = string
+  description = "DynamoDB table for state locking."
+}
+
+variable "github_deploy_state_key" {
+  type        = string
+  description = "S3 key for github_deploy state (e.g. <repo>/github-deploy/terraform.tfstate)."
 }
 
 variable "vpc_cidr" {

@@ -1,0 +1,4 @@
+{
+  "error": "unauthorized",
+  "hint": "Mock — live API and sap_session flow are not running while parked."
+}

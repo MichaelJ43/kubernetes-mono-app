@@ -9,6 +9,7 @@ on:
     paths:
       - 'infra/aws/**'
       - '.github/workflows/terraform-plan.yaml'
+      - '.github/workflows/deploy-main.yaml'
 
 permissions:
   id-token: write
@@ -29,9 +30,32 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
       - name: Terraform fmt
-        run: terraform fmt -check -recursive infra/aws/foundation infra/aws/k8s_platform
+        run: terraform fmt -check -recursive infra/aws
+      - name: Terraform validate (github_deploy)
+        working-directory: infra/aws/github_deploy
+        env:
+          TF_VAR_github_organization: ci
+          TF_VAR_github_repository: kubernetes-mono-app
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Terraform validate (parked_site)
+        working-directory: infra/aws/parked_site
+        env:
+          TF_VAR_parked_aliases: '["parked.example.dev"]'
+          TF_VAR_acm_certificate_arn: arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000001
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
       - name: Terraform validate (foundation)
         working-directory: infra/aws/foundation
+        env:
+          TF_VAR_aws_region: us-east-1
+          TF_VAR_state_bucket: ci-placeholder
+          TF_VAR_state_region: us-east-1
+          TF_VAR_lock_table: ci-placeholder
+          TF_VAR_github_deploy_state_key: ci-placeholder/terraform.tfstate
+          TF_VAR_github_organization: ci
         run: |
           terraform init -backend=false -input=false
           terraform validate
@@ -50,6 +74,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: true
       STATE_KEY_FOUNDATION: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+      STATE_KEY_GITHUB_DEPLOY: ${{ github.event.repository.name }}/github-deploy/terraform.tfstate
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +114,21 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
 
+      - name: Check github_deploy state exists (foundation needs remote state)
+        id: github_deploy_state
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          KEY="${{ env.STATE_KEY_GITHUB_DEPLOY }}"
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping **foundation** plan until **github_deploy** state exists in S3 (run **Terraform apply** or apply **infra/aws/github_deploy** once). PR validate still passed above."
+          fi
+
       - name: Terraform init (foundation)
+        if: steps.github_deploy_state.outputs.present == 'true'
         working-directory: infra/aws/foundation
         run: |
           terraform init -input=false \
@@ -101,6 +140,7 @@ jobs:
 
       - name: Terraform plan (foundation)
         id: plan-foundation
+        if: steps.github_deploy_state.outputs.present == 'true'
         working-directory: infra/aws/foundation
         env:
           TF_VAR_github_organization: ${{ github.repository_owner }}
@@ -108,14 +148,22 @@ jobs:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_github_deploy_state_key: ${{ env.STATE_KEY_GITHUB_DEPLOY }}
         run: terraform plan -input=false -no-color
 
       - name: Foundation state present in S3 (k8s_platform needs remote_state)
         id: foundation-state
-        if: success()
+        if: always()
         env:
           BUCKET: ${{ secrets.TF_STATE_BUCKET }}
         run: |
+          if [[ "${{ steps.github_deploy_state.outputs.present }}" != "true" ]]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if aws s3api head-object --bucket "$BUCKET" --key "${{ env.STATE_KEY_FOUNDATION }}" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else

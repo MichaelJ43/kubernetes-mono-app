@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="robots" content="noindex"/>
+  <title>Argo CD status · k8s.michaelj43.dev (offline)</title>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-tokens.css"/>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-shell.css"/>
+  <link rel="stylesheet" href="https://static.michaelj43.dev/v1/m43-primitives.css"/>
+</head>
+<body class="m43 m43-page">
+  <div data-m43-auth-header></div>
+  <div class="m43-page__body m43">
+    <header class="m43-site-header">
+      <h1>Argo CD applications</h1>
+      <p class="m43-intro">Static mock — cluster is parked. Data loads from <code>/mock/status.json</code>.</p>
+      <nav class="m43-nav" aria-label="Site">
+        <a href="/">Home</a>
+        · <a href="/mock/status.json">Raw JSON</a>
+      </nav>
+    </header>
+    <main class="m43-main">
+      <p class="m43-intro" id="status-error" hidden></p>
+      <table class="m43-table" id="status-table">
+        <thead><tr><th>Name</th><th>Health</th><th>Sync</th></tr></thead>
+        <tbody id="status-body">
+          <tr><td colspan="3" class="m43-intro">Loading…</td></tr>
+        </tbody>
+      </table>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var body = document.getElementById("status-body");
+      var err = document.getElementById("status-error");
+      fetch("/mock/status.json", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var rows = data.applications || [];
+          body.innerHTML = "";
+          if (rows.length === 0) {
+            body.innerHTML = "<tr><td colspan=\"3\" class=\"m43-intro\">No applications found.</td></tr>";
+            return;
+          }
+          rows.forEach(function (row) {
+            var tr = document.createElement("tr");
+            tr.innerHTML = "<td>" + escapeHtml(row.name) + "</td><td>" + escapeHtml(row.health) + "</td><td>" + escapeHtml(row.sync) + "</td>";
+            body.appendChild(tr);
+          });
+        })
+        .catch(function (e) {
+          err.hidden = false;
+          err.textContent = "Could not load /mock/status.json: " + (e && e.message ? e.message : String(e));
+          body.innerHTML = "";
+        });
+      function escapeHtml(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+    })();
+  </script>
+  <script src="https://static.michaelj43.dev/v1/m43-analytics.js" defer
+    data-m43-app="k8s-parked-status"
+    data-m43-api="https://api.michaelj43.dev"></script>
+  <script src="https://static.michaelj43.dev/v1/m43-auth-header.js" defer
+    data-m43-auth
+    data-m43-api="https://api.michaelj43.dev"
+    data-m43-auth-origin="https://auth.michaelj43.dev"
+    data-m43-home-url="https://michaelj43.dev/"></script>
+</body>
+</html>

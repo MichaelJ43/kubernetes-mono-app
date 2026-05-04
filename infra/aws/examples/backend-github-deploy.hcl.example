@@ -1,0 +1,8 @@
+# Remote state for infra/aws/github_deploy (same bucket + lock table as other stacks).
+# Key must match GitHub Actions: <repo-short-name>/github-deploy/terraform.tfstate
+
+bucket         = "YOUR_STATE_BUCKET"
+key            = "kubernetes-mono-app/github-deploy/terraform.tfstate"
+region         = "us-east-1"
+encrypt        = true
+dynamodb_table = "YOUR_LOCK_TABLE"

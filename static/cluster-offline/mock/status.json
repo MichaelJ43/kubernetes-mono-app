@@ -1,0 +1,8 @@
+{
+  "note": "Static mock while cluster is parked",
+  "applications": [
+    { "name": "api", "health": "Offline", "sync": "Unknown" },
+    { "name": "portal", "health": "Offline", "sync": "Unknown" },
+    { "name": "postgres", "health": "Offline", "sync": "Unknown" }
+  ]
+}

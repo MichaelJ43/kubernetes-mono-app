@@ -1,0 +1,6 @@
+{
+  "items": [
+    { "id": 1, "name": "example (mock)" }
+  ],
+  "message": "Mock list — no database while parked."
+}

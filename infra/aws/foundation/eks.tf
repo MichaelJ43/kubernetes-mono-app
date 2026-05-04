@@ -7,7 +7,7 @@ locals {
   eks_access_entries = merge(
     {
       github_terraform = {
-        principal_arn = aws_iam_role.github_terraform.arn
+        principal_arn = data.terraform_remote_state.github_deploy.outputs.github_actions_terraform_role_arn
         policy_associations = {
           admin = {
             policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
@@ -18,7 +18,7 @@ locals {
         }
       }
       github_bootstrap = {
-        principal_arn = aws_iam_role.github_bootstrap.arn
+        principal_arn = data.terraform_remote_state.github_deploy.outputs.github_actions_bootstrap_role_arn
         policy_associations = {
           admin = {
             policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
@@ -29,7 +29,7 @@ locals {
         }
       }
     },
-    var.github_actions_deploy_role_arn != null && var.github_actions_deploy_role_arn != aws_iam_role.github_terraform.arn ? {
+    var.github_actions_deploy_role_arn != null && var.github_actions_deploy_role_arn != data.terraform_remote_state.github_deploy.outputs.github_actions_terraform_role_arn ? {
       github_actions_deploy = {
         principal_arn = var.github_actions_deploy_role_arn
         policy_associations = {

@@ -1,0 +1,93 @@
+name: Static site deploy
+
+# Manual or called from **deploy-main** when SSM **site_mode=static**. Applies **parked_site** and syncs
+# **static/cluster-offline** to S3 + invalidates CloudFront. Does not create Route53 records by default
+# (use **soft-destroy** to cut DNS from the live cluster to CloudFront).
+
+on:
+  workflow_call:
+    secrets: inherit
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: static-site-deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment: deploy
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: true
+      STATE_KEY_PARKED: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AWS deploy role and backend secrets
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK: ${{ secrets.TF_LOCK_TABLE }}
+        run: |
+          err=0
+          if [ -z "$ARN" ]; then echo "::error::AWS_DEPLOY_ROLE_ARN is not set."; err=1; fi
+          if [ -z "$BUCKET" ]; then echo "::error::TF_STATE_BUCKET is not set."; err=1; fi
+          if [ -z "$LOCK" ]; then echo "::error::TF_LOCK_TABLE is not set."; err=1; fi
+          exit "$err"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Terraform apply (parked_site)
+        working-directory: infra/aws/parked_site
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
+          TF_VAR_parked_aliases: '["k8s.michaelj43.dev","api.k8s.michaelj43.dev"]'
+          TF_VAR_route53_zone_id: ${{ secrets.TF_ROUTE53_HOSTED_ZONE_ID }}
+          TF_VAR_manage_route53_records: "false"
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.STATE_KEY_PARKED }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+          terraform apply -input=false -auto-approve
+
+      - name: Upload static site (Content-Type for HTML + JSON)
+        working-directory: infra/aws/parked_site
+        run: |
+          set -euo pipefail
+          BUCKET=$(terraform output -raw s3_bucket_id)
+          ROOT="${GITHUB_WORKSPACE}/static/cluster-offline"
+          aws s3 rm "s3://${BUCKET}/" --recursive || true
+          find "$ROOT" -type f | while IFS= read -r f; do
+            rel="${f#$ROOT/}"
+            case "$f" in
+              *.json) ct="application/json" ;;
+              *.html) ct="text/html; charset=utf-8" ;;
+              *) ct="application/octet-stream" ;;
+            esac
+            aws s3 cp "$f" "s3://${BUCKET}/${rel}" --content-type "$ct" --cache-control "max-age=60"
+          done
+
+      - name: Invalidate CloudFront
+        working-directory: infra/aws/parked_site
+        run: |
+          CID=$(terraform output -raw cloudfront_distribution_id)
+          aws cloudfront create-invalidation --distribution-id "${CID}" --paths "/*"

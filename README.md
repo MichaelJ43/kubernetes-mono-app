@@ -1,7 +1,9 @@
 # kubernetes-mono-app
 
 [![Build](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/ci.yaml)
-[![Deploy](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml)
+[![Deploy main](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/deploy-main.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/deploy-main.yaml)
+[![Static site](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/static-site-deploy.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/static-site-deploy.yaml)
+[![Terraform apply](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml)
 
 Portfolio mono-repo: **Go API**, **portal** (`k8s.michaelj43.dev` landing + public **`/status`**), **GitOps (Argo CD)**, **EKS-oriented manifests** (ALB Ingress, CloudNativePG, Redis), and **GitHub Actions** for CI plus Argo bootstrap/teardown.
 
@@ -14,10 +16,13 @@ Portfolio mono-repo: **Go API**, **portal** (`k8s.michaelj43.dev` landing + publ
 | API | `apps/api` | HTTP `/health`, `/ready`, `/version`, `/items`, `/cache-demo`; goose migrations |
 | Portal | `apps/portal` | Static landing at **`k8s.michaelj43.dev`** + **`/status`** (Argo app names / health / sync); GHCR image tagged **`latest`** plus the **merge commit SHA**; **`deploy/base/portal`** Kustomize **`images[].newTag`** is pinned to that SHA in Git after each **`main`** image build |
 | GitOps | `deploy/gitops` | App-of-apps + per-stack `Application` CRs |
-| Infra (Terraform) | `infra/aws/foundation`, `infra/aws/k8s_platform` | VPC, EKS, EBS CSI addon, GitHub OIDC roles, Helm AWS LB controller |
+| Infra (Terraform) | `infra/aws/github_deploy`, `infra/aws/foundation`, `infra/aws/k8s_platform`, `infra/aws/parked_site` | OIDC IAM (persisted), VPC/EKS, Helm AWS LB controller, optional parked S3/CloudFront |
 | Manifests | `deploy/base`, `deploy/overlays/aws-prod` | Kustomize; TLS via ALB **certificate discovery** (no ACM ARN in Git) |
 | Argo install | `infra/argocd/values.yaml` | Used only by bootstrap (Actions or Helm CLI) |
-| CI | `.github/workflows/ci.yaml` | `go test` (API + portal), push **api** + **portal** images to GHCR on `main` |
+| CI | `.github/workflows/ci.yaml` | `go test` (API + portal) on push/PR |
+| Images | `.github/workflows/kubernetes-images.yaml` | Manual: GHCR build + Kustomize pin (+ optional rollout) |
+| Deploy routing | `.github/workflows/deploy-main.yaml` | Push to `main`: SSM `site_mode` → Terraform apply vs static site (see `docs/github-actions.md`) |
+| Static parked site | `.github/workflows/static-site-deploy.yaml`, `static/cluster-offline/` | Manual or invoked by **deploy-main** when mode is **static** |
 | Runbooks | `docs/runbooks` | Bootstrap & teardown |
 
 Full design: **`plan.md`**.
@@ -34,7 +39,7 @@ flowchart LR
 ## Replace placeholders
 
 1. **`repoURL` in `deploy/gitops/**/*.yaml`** — defaults to `https://github.com/michaelj43/kubernetes-mono-app.git`.
-2. **Container images** — CI pushes `ghcr.io/<lowercase-github-owner>/kubernetes-mono-app/{api,portal}:<sha>` and `:latest` on **`main`**; **`pin-images`** updates **`deploy/base/*/kustomization.yaml`** so **`images[].newTag`** is that **`<sha>`**, which Argo CD reconciles as an explicit rollout.
+2. **Container images** — Run **Kubernetes images & deploy pin** (`kubernetes-images.yaml`). It pushes `ghcr.io/<lowercase-github-owner>/kubernetes-mono-app/{api,portal}:<sha>` and `:latest`, then **`pin-images`** updates **`deploy/base/*/kustomization.yaml`** so **`images[].newTag`** is that **`<sha>`**.
 3. **Ingress hostname / TLS** — `deploy/base/api/ingress.yaml` (`api.k8s…`) and `deploy/base/portal/ingress.yaml` (**apex `k8s.michaelj43.dev`**) set `spec.tls.hosts` so the **AWS Load Balancer Controller** can **discover** **ACM** (include **`k8s…`** + **`*.k8s…`** on the cert)—**no certificate ARN in Git**. See [`docs/aws-domain-tls.md`](docs/aws-domain-tls.md).
 
 ## First full deploy (AWS + Argo)

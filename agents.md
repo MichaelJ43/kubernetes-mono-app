@@ -4,35 +4,49 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 
 ## Boundaries
 
-- **Terraform** (see `infra/aws/`) owns **account/region** resources: VPC, EKS, cluster addons, AWS Load Balancer Controller (Helm in `k8s_platform` stack), and **GitHub OIDC** IAM roles. **Argo CD** owns **Kubernetes application** state under `deploy/gitops/`. See `docs/github-actions.md` for GitHub Secrets/Variables.
-- **GitHub Actions** owns **CI** (build/test/image, **`pin-images`** commit that pins Kustomize tags to **`github.sha`**, optional EKS **`rollout`** after push to **`main`**) and **lifecycle** workflows (Argo bootstrap/teardown)—see `.github/workflows/` and **`docs/github-actions.md`** (**`EKS_CLUSTER_NAME`**, workflow **read/write** for **`pin-images`** pushes).
-- **Secrets** must not be committed in plaintext. Examples: copy patterns from docs; use External Secrets, Sealed Secrets, or manual one-time `kubectl` creation as described in `plan.md` §4.4.
+- **Terraform** (see `infra/aws/`) owns **account/region** resources. Split roots:
+  - **`github_deploy`** — GitHub OIDC + IAM roles for Actions (persists across cluster teardown).
+  - **`foundation`** — VPC, EKS, addons, IRSA for AWS Load Balancer Controller.
+  - **`k8s_platform`** — Helm `aws-load-balancer-controller`, ExternalDNS, etc.
+  - **`parked_site`** — S3 + CloudFront “cluster offline” static site (`static/cluster-offline`), optional Route53.
+- **Argo CD** owns **Kubernetes application** state under `deploy/gitops/`.
+- See **`docs/github-actions.md`** for secrets, state keys, and which workflows are **manual** vs **default on push**.
+
+**GitHub Actions**
+
+- **Push to `main`**: **`deploy-main.yaml`** reads SSM **`/kubernetes-mono-app/site_mode`** and calls **`terraform-apply`** (infra changes, mode **cluster**) or **`static-site-deploy`** (static paths, mode **static**). **`static-site-deploy`** is also available manually.
+- **CI tests**: **`ci.yaml`** on push/PR (Go only; no container build).
+- **Manual**: **`terraform-apply.yaml`** (EKS + **`github_deploy`** + Argo bootstrap), **`kubernetes-images.yaml`** (GHCR images + Kustomize pin + optional rollout), destroy / soft-destroy / full-destroy workflows — see **`docs/github-actions.md`**.
+- **Secrets** must not be committed in plaintext; patterns in docs and **`plan.md`** (e.g. §4.4).
 
 ## Layout (high signal)
 
 | Path | Purpose |
 |------|---------|
 | `apps/api` | Go HTTP API, Dockerfile, OpenAPI |
-| `infra/aws/foundation` | Terraform: VPC, EKS, addons, GitHub OIDC roles, IRSA for LB controller |
-| `infra/aws/k8s_platform` | Terraform: Helm `aws-load-balancer-controller` |
+| `infra/aws/github_deploy` | Terraform: GitHub OIDC trust + `gha-terraform` / `gha-bootstrap` IAM roles |
+| `infra/aws/foundation` | Terraform: VPC, EKS; reads **`github_deploy`** remote state for role ARNs |
+| `infra/aws/k8s_platform` | Terraform: Helm `aws-load-balancer-controller`, ExternalDNS |
+| `infra/aws/parked_site` | Terraform: S3 + CloudFront + `/status` → `status.html` function |
+| `static/cluster-offline` | Static HTML + mock JSON for parked mode (synced by **`static-site-deploy`**) |
 | `deploy/gitops` | Root `Application` + app-of-apps children |
-| `deploy/base/api` | API Deployment/Service/Ingress; Argo **api** app syncs this path; ALB **certificate discovery** (no ACM ARN in Git) |
-| `deploy/base/portal` | Portal Deployment/Ingress **`k8s.michaelj43.dev`** + **`/status`** (reads Argo `Application` CRs in `argocd`); Argo **portal** app |
+| `deploy/base/api` | API Deployment/Service/Ingress; Argo **api** app; ALB **certificate discovery** |
+| `deploy/base/portal` | Portal Ingress **`k8s.michaelj43.dev`** + **`/status`**; Argo **portal** app |
 | `apps/portal` | Go HTTP server for landing links + status page |
-| `deploy/overlays/aws-prod` | Optional Kustomize overlay for prod-only patches (defaults to wrapping `base/api` without ACM annotations) |
+| `deploy/overlays/aws-prod` | Optional Kustomize overlay for prod-only patches |
 | `deploy/base/postgres` | CloudNativePG `Cluster` + namespace |
-| `deploy/base/redis` | Redis Deployment + Service `redis-master` (Docker Official image on ECR Public) |
+| `deploy/base/redis` | Redis Deployment + Service `redis-master` |
 | `infra/argocd` | Helm values for **bootstrap** only |
 | `tests/component` | `docker-compose` integration |
-| `docs/` | Architecture, TLS, GitOps, testing, runbooks |
+| `docs/` | Architecture, TLS, GitOps, **`github-actions.md`**, runbooks |
 
 ## Conventions
 
 - Go **module**: `github.com/michaelj43/kubernetes-mono-app/apps/api` — if the GitHub org/user changes, update `go.mod` **import paths** and all imports consistently.
-- **`docs/post-merge-runbook.md`**: ordered bring-up after infra is on `main` (Terraform → TLS → Argo).
-- **Ingress** targets `api.k8s.michaelj43.dev`; ACM **must** be in the same region as the ALB. Prefer **certificate discovery** so ARNs are not in Git (`docs/aws-domain-tls.md`).
-- **Postgres**: operator first (`cnpg-operator` app), then `Cluster` CR; API expects Secret `portfolio-db-app` key **`uri`** (CloudNativePG application secret). If keys differ in your CNPG version, adjust `deploy/base/api/deployment.yaml` and document.
-- After the **first** push to `main`, use **feature branches** for subsequent work; only the initial bootstrap used `main` as requested by the repo owner.
+- **`docs/post-merge-runbook.md`**: bring-up order; ensure **`github_deploy`** precedes **`foundation`** on greenfield.
+- **Ingress** targets `api.k8s.michaelj43.dev`; ACM **must** be in the same region as the ALB. Prefer **certificate discovery** so ARNs are not in Git (`docs/aws-domain-tls.md`). **CloudFront** viewer cert must be **us-east-1** — reuse **`TF_ACM_CERTIFICATE_ARN`** when it is already that regional ARN.
+- **Postgres**: operator first (`cnpg-operator` app), then `Cluster` CR; API expects Secret `portfolio-db-app` key **`uri`**.
+- After the **first** push to **`main`**, use **feature branches** for subsequent work.
 
 ## Testing expectations
 
@@ -42,4 +56,4 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 ## Security
 
 - Avoid exposing Argo CD on a public hostname without strong auth (`plan.md` §10).
-- Treat `argocd-teardown` and cluster-admin kubeconfigs as destructive capability.
+- Treat **`argocd-teardown`**, **`soft-destroy`**, **`aws-full-destroy`**, and cluster-admin kubeconfigs as destructive capability.
