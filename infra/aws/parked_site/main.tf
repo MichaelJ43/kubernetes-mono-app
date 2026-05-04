@@ -115,9 +115,10 @@ data "aws_route53_zone" "parked" {
 resource "aws_route53_record" "parked_a" {
   for_each = var.manage_route53_records && var.route53_zone_id != "" ? toset(var.parked_aliases) : toset([])
 
-  zone_id = data.aws_route53_zone.parked[0].zone_id
-  name    = each.value
-  type    = "A"
+  zone_id         = data.aws_route53_zone.parked[0].zone_id
+  name            = each.value
+  type            = "A"
+  allow_overwrite = true
 
   alias {
     name                   = aws_cloudfront_distribution.site.domain_name
@@ -129,9 +130,10 @@ resource "aws_route53_record" "parked_a" {
 resource "aws_route53_record" "parked_aaaa" {
   for_each = var.manage_route53_records && var.route53_zone_id != "" ? toset(var.parked_aliases) : toset([])
 
-  zone_id = data.aws_route53_zone.parked[0].zone_id
-  name    = each.value
-  type    = "AAAA"
+  zone_id         = data.aws_route53_zone.parked[0].zone_id
+  name            = each.value
+  type            = "AAAA"
+  allow_overwrite = true
 
   alias {
     name                   = aws_cloudfront_distribution.site.domain_name
