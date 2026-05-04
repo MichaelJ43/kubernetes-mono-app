@@ -1,6 +1,6 @@
 name: Static site deploy
 
-# Manual or called from **deploy-main** when SSM **site_mode=static**. Applies **parked_site** and syncs
+# Manual **workflow_dispatch** (no inputs) or called from **deploy-main** when SSM **site_mode=static**. Applies **parked_site** and syncs
 # **static/cluster-offline** to S3 + invalidates CloudFront. Does not create Route53 records by default
 # (use **soft-destroy** to cut DNS from the live cluster to CloudFront).
 

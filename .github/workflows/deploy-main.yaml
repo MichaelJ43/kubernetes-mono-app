@@ -1,13 +1,15 @@
 name: Deploy main
 
-# On push to **main**: reads SSM **`/kubernetes-mono-app/site_mode`** (`cluster` | `static`, default **cluster**).
+# On push to **main** or **workflow_dispatch** (no inputs): reads SSM **`/kubernetes-mono-app/site_mode`** (`cluster` | `static`, default **cluster**).
 # - **cluster** + infra paths changed → reusable **Terraform apply** (EKS infra + Argo bootstrap).
 # - **static** + static paths changed → reusable **Static site deploy** (S3/CloudFront).
+# Manual dispatch treats both path filters as **true** so you can redeploy without a diff on **main**.
 # Application manifest changes are picked up by **Argo CD** from Git (no extra job here).
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -57,12 +59,13 @@ jobs:
   paths:
     runs-on: ubuntu-latest
     outputs:
-      infra: ${{ steps.filter.outputs.infra }}
-      static: ${{ steps.filter.outputs.static }}
+      infra: ${{ steps.flags.outputs.infra }}
+      static: ${{ steps.flags.outputs.static }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
+        if: github.event_name == 'push'
         with:
           base: ${{ github.event.before }}
           filters: |
@@ -74,12 +77,24 @@ jobs:
               - 'static/cluster-offline/**'
               - 'infra/aws/parked_site/**'
               - '.github/workflows/static-site-deploy.yaml'
+      - name: Path flags (push vs manual)
+        id: flags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "infra=true" >> "$GITHUB_OUTPUT"
+            echo "static=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "infra=${{ steps.filter.outputs.infra }}" >> "$GITHUB_OUTPUT"
+            echo "static=${{ steps.filter.outputs.static }}" >> "$GITHUB_OUTPUT"
+          fi
 
   cluster-terraform:
     needs: [site_mode, paths]
     if: needs.site_mode.outputs.mode == 'cluster' && needs.paths.outputs.infra == 'true'
     uses: ./.github/workflows/terraform-apply.yaml
     secrets: inherit
+    with:
+      called_from_deploy_main: true
 
   static-site:
     needs: [site_mode, paths]

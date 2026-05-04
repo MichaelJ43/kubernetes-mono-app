@@ -34,8 +34,9 @@ The deploy role needs **`ssm:GetParameter`** and **`ssm:PutParameter`** on that 
 | What | How it runs |
 |------|-------------|
 | **Push to `main` (routed)** | **`deploy-main.yaml`** reads SSM, then calls **`terraform-apply`** or **`static-site-deploy`** via **`workflow_call`** when paths match (see above). |
-| **Static parked site** (manual) | **Actions → Static site deploy** — same steps as the static branch of **`deploy-main`**. |
-| **EKS / Terraform / Argo** (manual) | **Actions → Terraform apply** (confirm **`APPLY`**) — same as cluster branch of **`deploy-main`**, without waiting on path filters. |
+| **Redeploy on `main` without a diff** | **Actions → Deploy main** (`workflow_dispatch`, no inputs) — treats infra and static paths as changed so the matching child workflow(s) run for the current SSM **`site_mode`**. |
+| **Static parked site** (manual) | **Actions → Static site deploy** — same steps as the static branch of **`deploy-main`** (no workflow inputs). |
+| **EKS / Terraform / Argo** (manual) | **Actions → Terraform apply** — same stack as **`deploy-main`**’s cluster path; no form inputs (region from **`TF_STATE_REGION`**, cluster from **`EKS_CLUSTER_NAME`** / default **`k8s-mono`**). |
 | **Images + Kustomize pin** | **`kubernetes-images.yaml`** (`workflow_dispatch`). |
 
 ## Secrets (`Settings → Secrets and variables → Actions → Secrets`)
@@ -75,8 +76,8 @@ If your account already has **`github_deploy`**-equivalent IAM **inside** an old
 
 ### When **Terraform apply** runs
 
-- **Manual** — **Actions → Terraform apply**, confirm **`APPLY`**.
-- **Automatic** — **`deploy-main`** calls it on push to **`main`** when SSM **`site_mode`** is **`cluster`** and path filters show **infra** changes.
+- **Manual** — **Actions → Terraform apply** (`workflow_dispatch`, no inputs).
+- **Automatic** — **`deploy-main`** calls it on push to **`main`** (or manual **`deploy-main`**) when SSM **`site_mode`** is **`cluster`** and path filters show **infra** changes.
 
 In both cases it applies **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD Helm + root app, then writes SSM **`site_mode=cluster`**.
 
@@ -87,16 +88,16 @@ In both cases it applies **`github_deploy`**, **`foundation`**, **`k8s_platform`
 
 ### Soft destroy (park EKS, keep GitHub IAM)
 
-- **Actions → Soft destroy**: confirm **`SOFT DESTROY`**, set cluster name and region. Parks **S3 + CloudFront**, uploads static mocks, deletes Ingresses (and optionally Argo), waits, then applies **Route53 → CloudFront** if **`TF_ROUTE53_HOSTED_ZONE_ID`** is set, then **`terraform destroy`** on **`k8s_platform`** and **`foundation`**. Does **not** destroy **`github_deploy`** or **`parked_site`**.
+- **Actions → Soft destroy** (`workflow_dispatch`, no inputs). Cluster and region follow **`EKS_CLUSTER_NAME`** / **`TF_STATE_REGION`** (same defaults as **Terraform apply**). Parks **S3 + CloudFront**, uploads static mocks, deletes Ingresses and Argo, waits, then applies **Route53 → CloudFront** if **`TF_ROUTE53_HOSTED_ZONE_ID`** is set, then **`terraform destroy`** on **`k8s_platform`** and **`foundation`**. Does **not** destroy **`github_deploy`** or **`parked_site`**.
 
 ### Full AWS destroy (stack cleanup)
 
-- **`terraform-destroy.yaml`** — **`k8s_platform`** then **`foundation`** only (no parked stack).
-- **`aws-full-destroy.yaml`** — **`k8s_platform`**, **`foundation`**, **`parked_site`**, each **`continue-on-error`**. Does **not** destroy **`github_deploy`**.
+- **`terraform-destroy.yaml`** — **`k8s_platform`** then **`foundation`** only (no parked stack); **`workflow_dispatch`** with no inputs (gate with **`deploy`** environment rules).
+- **`aws-full-destroy.yaml`** — **`k8s_platform`**, **`foundation`**, **`parked_site`**, each **`continue-on-error`**. Does **not** destroy **`github_deploy`**. No workflow inputs.
 
 ### Full undeploy (legacy naming)
 
-- **Full undeploy**: confirm **`FULL UNDEPLOY`**, cluster / region; optional Argo cleanup; **`k8s_platform`** then **`foundation`** (same as **`terraform-destroy`** with optional kubectl).
+- **Full undeploy** — Argo / root app cleanup via **`kubectl`** / **`helm`**, then **`k8s_platform`** then **`foundation`** (no workflow inputs; cluster/region from **`EKS_CLUSTER_NAME`** / **`TF_STATE_REGION`**). If the API is already gone, use **`terraform-destroy`** instead.
 
 ## Variables (`Settings → Secrets and variables → Actions → Variables`)
 
@@ -104,7 +105,7 @@ Optional convenience:
 
 | Name | Example | Notes |
 |------|---------|-------|
-| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | Optional **`kubernetes-images`** rollout: **`kubectl apply`** after **`pin-images`**. |
+| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | Used by **`kubernetes-images`** rollout, **`soft-destroy`**, **`full-undeploy`**, and **`github_deploy`** **`TF_VAR_cluster_name`** in **`terraform-apply`**; defaults to **`k8s-mono`** when unset. |
 | **`EKS_AWS_REGION`** | `us-east-1` | Region for **`aws eks update-kubeconfig`** in **`kubernetes-images`**. |
 
 **`terraform-apply.yaml`** uses **`EKS_CLUSTER_NAME`** (or **`k8s-mono`**) for **`TF_VAR_cluster_name`** on **`github_deploy`** so IAM role names stay aligned with **`foundation`**.
@@ -115,7 +116,7 @@ GitHub OIDC IAM is created by **`github_deploy`**, not **`foundation`**. Until *
 
 1. Configure S3 backend and run **`github_deploy`** (same bucket/key pattern as above).
 2. Set **`AWS_DEPLOY_ROLE_ARN`**, **`TF_STATE_BUCKET`**, **`TF_LOCK_TABLE`**.
-3. Run **`terraform-apply.yaml`** with **`APPLY`**, or apply **`foundation`** / **`k8s_platform`** locally using **`infra/aws/examples/`**.
+3. Run **`terraform-apply.yaml`** from **Actions**, or apply **`foundation`** / **`k8s_platform`** locally using **`infra/aws/examples/`**.
 
 ## CI image push and deploy pins (manual)
 

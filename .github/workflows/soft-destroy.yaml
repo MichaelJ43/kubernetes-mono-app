@@ -3,28 +3,10 @@ name: Soft destroy (park cluster)
 # Brings up / refreshes the parked S3 + CloudFront site, uploads static mocks, cuts Route53 to
 # CloudFront (when **TF_ROUTE53_HOSTED_ZONE_ID** is set), then destroys **k8s_platform** and **foundation**.
 # GitHub deploy IAM remains in **github_deploy** state so Actions keep working.
+# **workflow_dispatch** has no inputs: region from **TF_STATE_REGION** (fallback **us-east-1**), cluster from **EKS_CLUSTER_NAME** (fallback **k8s-mono**).
 
 on:
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: Type SOFT DESTROY to run (destructive to EKS/VPC)
-        required: true
-        type: string
-      cluster_name:
-        description: EKS cluster name (must match foundation)
-        required: true
-        type: string
-      aws_region:
-        description: AWS region for cluster and Terraform state backend
-        required: true
-        default: us-east-1
-        type: string
-      skip_argo:
-        description: Skip kubectl/Helm Argo steps (only delete portfolio Ingresses)
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   id-token: write
@@ -36,7 +18,6 @@ concurrency:
 
 jobs:
   soft-destroy:
-    if: github.event.inputs.confirm == 'SOFT DESTROY'
     environment: deploy
     runs-on: ubuntu-latest
     env:
@@ -45,7 +26,8 @@ jobs:
       STATE_KEY_K8S_PLATFORM: ${{ github.event.repository.name }}/k8s-platform/terraform.tfstate
       STATE_KEY_PARKED: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
       STATE_KEY_GITHUB_DEPLOY: ${{ github.event.repository.name }}/github-deploy/terraform.tfstate
-      AWS_REGION: ${{ secrets.TF_STATE_REGION || github.event.inputs.aws_region }}
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+      CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'k8s-mono' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +47,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ github.event.inputs.aws_region }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -75,7 +57,7 @@ jobs:
       - name: Terraform apply (parked_site, DNS off)
         working-directory: infra/aws/parked_site
         env:
-          TF_VAR_aws_region: ${{ github.event.inputs.aws_region }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_repository: ${{ github.event.repository.name }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
           TF_VAR_parked_aliases: '["k8s.michaelj43.dev","api.k8s.michaelj43.dev"]'
@@ -120,10 +102,9 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
       - name: kubeconfig
-        run: aws eks update-kubeconfig --name "${{ inputs.cluster_name }}" --region "${{ inputs.aws_region }}"
+        run: aws eks update-kubeconfig --name "${{ env.CLUSTER_NAME }}" --region "${{ env.AWS_REGION }}"
 
-      - name: Delete Argo root app and Helm (optional)
-        if: ${{ !inputs.skip_argo }}
+      - name: Delete Argo root app and Helm
         run: |
           kubectl delete -f deploy/gitops/root-app.yaml --ignore-not-found
           helm uninstall argocd -n argocd --wait || true
@@ -139,7 +120,7 @@ jobs:
       - name: Terraform apply (parked_site, Route53 on)
         working-directory: infra/aws/parked_site
         env:
-          TF_VAR_aws_region: ${{ github.event.inputs.aws_region }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_repository: ${{ github.event.repository.name }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
           TF_VAR_parked_aliases: '["k8s.michaelj43.dev","api.k8s.michaelj43.dev"]'
@@ -157,7 +138,7 @@ jobs:
       - name: Destroy k8s_platform
         working-directory: infra/aws/k8s_platform
         env:
-          TF_VAR_aws_region: ${{ github.event.inputs.aws_region }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
@@ -177,7 +158,7 @@ jobs:
         env:
           TF_VAR_github_organization: ${{ github.repository_owner }}
           TF_VAR_github_repository: ${{ github.event.repository.name }}
-          TF_VAR_aws_region: ${{ github.event.inputs.aws_region }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_github_actions_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           TF_VAR_acm_certificate_arn: ${{ secrets.TF_ACM_CERTIFICATE_ARN }}
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}

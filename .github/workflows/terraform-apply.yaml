@@ -1,18 +1,20 @@
 name: Terraform apply
 
-# Manual (**workflow_dispatch** + confirm APPLY) or called from **deploy-main** when SSM site_mode=cluster.
+# Manual **workflow_dispatch** (no form inputs) or called from **deploy-main** when SSM site_mode=cluster.
+# Region: **TF_STATE_REGION** secret (fallback **us-east-1**). Cluster name: **EKS_CLUSTER_NAME** repo variable (fallback **k8s-mono**).
 # Applies github_deploy → foundation → k8s_platform, then Argo CD + root app; sets SSM **site_mode=cluster**.
 # Requires: S3 bucket + DynamoDB lock; state keys include <repo>/github-deploy/..., foundation, k8s-platform.
 
 on:
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: Type APPLY to run
-        required: true
-        type: string
   workflow_call:
     secrets: inherit
+    inputs:
+      called_from_deploy_main:
+        description: True when invoked by deploy-main (caller event is still **push**).
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   id-token: write
@@ -24,7 +26,7 @@ concurrency:
 
 jobs:
   apply:
-    if: github.event_name == 'workflow_call' || (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'APPLY')
+    if: inputs.called_from_deploy_main || github.event_name == 'workflow_dispatch'
     environment: deploy
     runs-on: ubuntu-latest
     env:
