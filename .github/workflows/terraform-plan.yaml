@@ -114,17 +114,17 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
 
-      - name: Check github_deploy state exists (foundation needs remote state)
+      - name: Check GitHub deploy IAM role exists (foundation resolves ARNs from IAM)
         id: github_deploy_state
         env:
-          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
         run: |
-          KEY="${{ env.STATE_KEY_GITHUB_DEPLOY }}"
-          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+          CLUSTER="${EKS_CLUSTER_NAME:-k8s-mono}"
+          if aws iam get-role --role-name "${CLUSTER}-gha-terraform" 2>/dev/null; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping **foundation** plan until **github_deploy** state exists in S3 (run **Terraform apply** or apply **infra/aws/github_deploy** once). PR validate still passed above."
+            echo "::notice::Skipping **foundation** plan until **github_deploy** has created IAM (no role **${CLUSTER}-gha-terraform**). Run **Terraform apply** or apply **infra/aws/github_deploy** once. PR validate still passed above."
           fi
 
       - name: Terraform init (foundation)

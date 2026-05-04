@@ -4,14 +4,14 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-# GitHub OIDC IAM roles live in the separate github_deploy root module.
-data "terraform_remote_state" "github_deploy" {
-  backend = "s3"
-  config = {
-    bucket         = var.state_bucket
-    key            = var.github_deploy_state_key
-    region         = var.state_region
-    dynamodb_table = var.lock_table
-    encrypt        = true
-  }
+# GitHub Actions IAM roles are created by the separate **github_deploy** root module.
+# Resolve them by **name** (same convention as **github_deploy**) so **foundation** plan/destroy
+# does not depend on **github_deploy** Terraform state existing in S3 (e.g. state object removed
+# while IAM roles remain).
+data "aws_iam_role" "github_terraform" {
+  name = "${var.cluster_name}-gha-terraform"
+}
+
+data "aws_iam_role" "github_bootstrap" {
+  name = "${var.cluster_name}-gha-bootstrap"
 }
