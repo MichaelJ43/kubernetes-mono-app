@@ -9,16 +9,34 @@ Workflows use two environments so you can scope **secrets**, **protection rules*
 | Environment | Workflows |
 |-------------|-----------|
 | **`build`** | **`ci.yaml`** — Go tests only. **`kubernetes-images.yaml`** — manual GHCR build, Kustomize pin, optional rollout. |
-| **`deploy`** | **`terraform-apply.yaml`**, **`terraform-destroy.yaml`**, **`full-undeploy.yaml`**, **`static-site-deploy.yaml`**, **`soft-destroy.yaml`**, **`aws-full-destroy.yaml`**, **`argocd-bootstrap.yaml`**, **`argocd-teardown.yaml`**. |
+| **`deploy`** | **`deploy-main.yaml`**, **`terraform-apply.yaml`**, **`terraform-destroy.yaml`**, **`full-undeploy.yaml`**, **`static-site-deploy.yaml`**, **`soft-destroy.yaml`**, **`aws-full-destroy.yaml`**, **`argocd-bootstrap.yaml`**, **`argocd-teardown.yaml`**. |
 
 Create **`build`** and **`deploy`** under **Settings → Environments**. Add **required reviewers** or **wait timers** on **`deploy`** for destructive paths. Repository secrets are available in environments unless you override with environment-specific secrets.
+
+## SSM `site_mode` (auto deploy on merge to `main`)
+
+Parameter name (String): **`/kubernetes-mono-app/site_mode`**
+
+| Value | Meaning |
+|-------|---------|
+| **`cluster`** (default when parameter is missing) | Live EKS: **`deploy-main`** runs **`terraform-apply`** only when **`infra/aws/**`** (or related workflow files) change. **Argo CD** still reconciles app changes from Git without a deploy workflow. |
+| **`static`** | Parked mode: **`deploy-main`** runs **`static-site-deploy`** only when **`static/cluster-offline/**`**, **`infra/aws/parked_site/**`**, or the static workflow file change. |
+
+**Who sets it**
+
+- **`terraform-apply.yaml`** (manual or called from **`deploy-main`**) sets **`cluster`** after a successful apply (including Argo bootstrap).
+- **`soft-destroy.yaml`** sets **`static`** after **`foundation`** destroy completes.
+
+The deploy role needs **`ssm:GetParameter`** and **`ssm:PutParameter`** on that name (AdministratorAccess includes this).
 
 ## Default vs manual deploy paths
 
 | What | How it runs |
 |------|-------------|
-| **Static parked site** (S3 + CloudFront + `static/cluster-offline`) | **Push to `main`** when files under **`static/cluster-offline/**` or **`infra/aws/parked_site/**`** change — workflow **`static-site-deploy.yaml`**. |
-| **EKS / Terraform / Argo** | **Manual** — run **`terraform-apply.yaml`** (confirm **`APPLY`**). Images + Kustomize pin — **`kubernetes-images.yaml`** (`workflow_dispatch`). |
+| **Push to `main` (routed)** | **`deploy-main.yaml`** reads SSM, then calls **`terraform-apply`** or **`static-site-deploy`** via **`workflow_call`** when paths match (see above). |
+| **Static parked site** (manual) | **Actions → Static site deploy** — same steps as the static branch of **`deploy-main`**. |
+| **EKS / Terraform / Argo** (manual) | **Actions → Terraform apply** (confirm **`APPLY`**) — same as cluster branch of **`deploy-main`**, without waiting on path filters. |
+| **Images + Kustomize pin** | **`kubernetes-images.yaml`** (`workflow_dispatch`). |
 
 ## Secrets (`Settings → Secrets and variables → Actions → Secrets`)
 
@@ -57,11 +75,15 @@ If your account already has **`github_deploy`**-equivalent IAM **inside** an old
 
 ### When **Terraform apply** runs
 
-- **Manual only** — **Actions → Terraform apply**, confirm **`APPLY`**. Applies **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD Helm + root app.
+- **Manual** — **Actions → Terraform apply**, confirm **`APPLY`**.
+- **Automatic** — **`deploy-main`** calls it on push to **`main`** when SSM **`site_mode`** is **`cluster`** and path filters show **infra** changes.
 
-### Static site deploy (**default on relevant pushes**)
+In both cases it applies **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD Helm + root app, then writes SSM **`site_mode=cluster`**.
 
-- **Actions → Static site deploy** also runs on **push to `main`** for **`static/cluster-offline/**` and **`infra/aws/parked_site/**`**. Applies **`parked_site`** (no Route53 record management by default), uploads assets with correct **`Content-Type`** for **`.json`**, invalidates CloudFront.
+### Static site deploy
+
+- **Actions → Static site deploy** (`workflow_dispatch`) — same steps as **`deploy-main`** when SSM **`site_mode=static`** and static paths change.
+- Applies **`parked_site`** (no Route53 record management by default), uploads assets with correct **`Content-Type`** for **`.json`**, invalidates CloudFront.
 
 ### Soft destroy (park EKS, keep GitHub IAM)
 
@@ -117,4 +139,4 @@ Repository **Actions → General → Workflow permissions** must allow **read an
 
 4. **EKS access** — Deploy role must have an **EKS access entry**; **`foundation`** wires **`AWS_DEPLOY_ROLE_ARN`** via **`github_deploy`** role ARNs.
 
-5. **`terraform plan` on PR** — **`foundation`** needs **`github_deploy`** state in S3; otherwise plan fails until bootstrap step **1** is done.
+5. **`terraform plan` on PR** — If **`github_deploy`** state is **missing** in S3, the **foundation** plan step is **skipped** (notice in logs) so the PR stays green; run **`github_deploy`** / **Terraform apply** once, then re-run the plan check.

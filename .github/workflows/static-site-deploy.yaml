@@ -1,16 +1,12 @@
 name: Static site deploy
 
-# Default path: on push to main, applies **parked_site** Terraform (if needed) and syncs
-# **static/cluster-offline** to S3 + invalidates CloudFront. Does not create Route53 records
+# Manual or called from **deploy-main** when SSM **site_mode=static**. Applies **parked_site** and syncs
+# **static/cluster-offline** to S3 + invalidates CloudFront. Does not create Route53 records by default
 # (use **soft-destroy** to cut DNS from the live cluster to CloudFront).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "static/cluster-offline/**"
-      - "infra/aws/parked_site/**"
-      - ".github/workflows/static-site-deploy.yaml"
+  workflow_call:
+    secrets: inherit
   workflow_dispatch:
 
 permissions:

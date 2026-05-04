@@ -192,3 +192,12 @@ jobs:
             -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
           terraform destroy -input=false -auto-approve
+
+      - name: Set SSM site mode to static (for deploy-main routing)
+        if: success()
+        run: |
+          aws ssm put-parameter \
+            --name "/kubernetes-mono-app/site_mode" \
+            --value "static" \
+            --type String \
+            --overwrite

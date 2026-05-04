@@ -1,0 +1,88 @@
+name: Deploy main
+
+# On push to **main**: reads SSM **`/kubernetes-mono-app/site_mode`** (`cluster` | `static`, default **cluster**).
+# - **cluster** + infra paths changed → reusable **Terraform apply** (EKS infra + Argo bootstrap).
+# - **static** + static paths changed → reusable **Static site deploy** (S3/CloudFront).
+# Application manifest changes are picked up by **Argo CD** from Git (no extra job here).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-main-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  site_mode:
+    environment: deploy
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.ssm.outputs.mode }}
+    steps:
+      - name: Require AWS deploy role
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ARN" ]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not set."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+
+      - name: Read site mode from SSM
+        id: ssm
+        run: |
+          set -euo pipefail
+          REGION="${{ secrets.TF_STATE_REGION || 'us-east-1' }}"
+          export AWS_DEFAULT_REGION="$REGION"
+          RAW=$(aws ssm get-parameter --name "/kubernetes-mono-app/site_mode" --query "Parameter.Value" --output text 2>/dev/null || true)
+          RAW=${RAW:-cluster}
+          case "$RAW" in
+            static|cluster) MODE="$RAW" ;;
+            *) MODE="cluster" ;;
+          esac
+          echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+          echo "Resolved site_mode=${MODE} (SSM raw was '${RAW:-<unset>}')"
+
+  paths:
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      static: ${{ steps.filter.outputs.static }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            infra:
+              - 'infra/aws/**'
+              - '.github/workflows/terraform-apply.yaml'
+              - '.github/workflows/deploy-main.yaml'
+            static:
+              - 'static/cluster-offline/**'
+              - 'infra/aws/parked_site/**'
+              - '.github/workflows/static-site-deploy.yaml'
+
+  cluster-terraform:
+    needs: [site_mode, paths]
+    if: needs.site_mode.outputs.mode == 'cluster' && needs.paths.outputs.infra == 'true'
+    uses: ./.github/workflows/terraform-apply.yaml
+    secrets: inherit
+
+  static-site:
+    needs: [site_mode, paths]
+    if: needs.site_mode.outputs.mode == 'static' && needs.paths.outputs.static == 'true'
+    uses: ./.github/workflows/static-site-deploy.yaml
+    secrets: inherit

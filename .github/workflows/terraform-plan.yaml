@@ -9,6 +9,7 @@ on:
     paths:
       - 'infra/aws/**'
       - '.github/workflows/terraform-plan.yaml'
+      - '.github/workflows/deploy-main.yaml'
 
 permissions:
   id-token: write
@@ -113,7 +114,21 @@ jobs:
           terraform_version: 1.9.0
           terraform_wrapper: false
 
+      - name: Check github_deploy state exists (foundation needs remote state)
+        id: github_deploy_state
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          KEY="${{ env.STATE_KEY_GITHUB_DEPLOY }}"
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping **foundation** plan until **github_deploy** state exists in S3 (run **Terraform apply** or apply **infra/aws/github_deploy** once). PR validate still passed above."
+          fi
+
       - name: Terraform init (foundation)
+        if: steps.github_deploy_state.outputs.present == 'true'
         working-directory: infra/aws/foundation
         run: |
           terraform init -input=false \
@@ -125,6 +140,7 @@ jobs:
 
       - name: Terraform plan (foundation)
         id: plan-foundation
+        if: steps.github_deploy_state.outputs.present == 'true'
         working-directory: infra/aws/foundation
         env:
           TF_VAR_github_organization: ${{ github.repository_owner }}
@@ -140,10 +156,14 @@ jobs:
 
       - name: Foundation state present in S3 (k8s_platform needs remote_state)
         id: foundation-state
-        if: success()
+        if: always()
         env:
           BUCKET: ${{ secrets.TF_STATE_BUCKET }}
         run: |
+          if [[ "${{ steps.github_deploy_state.outputs.present }}" != "true" ]]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if aws s3api head-object --bucket "$BUCKET" --key "${{ env.STATE_KEY_FOUNDATION }}" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else

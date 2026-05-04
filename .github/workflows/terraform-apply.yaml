@@ -1,7 +1,7 @@
 name: Terraform apply
 
-# Manual only: applies github_deploy (GitHub OIDC IAM) → foundation → k8s_platform, then Argo CD + root app.
-# For S3/CloudFront parked content sync on every merge, use **static-site-deploy** (default on push to main).
+# Manual (**workflow_dispatch** + confirm APPLY) or called from **deploy-main** when SSM site_mode=cluster.
+# Applies github_deploy → foundation → k8s_platform, then Argo CD + root app; sets SSM **site_mode=cluster**.
 # Requires: S3 bucket + DynamoDB lock; state keys include <repo>/github-deploy/..., foundation, k8s-platform.
 
 on:
@@ -11,6 +11,8 @@ on:
         description: Type APPLY to run
         required: true
         type: string
+  workflow_call:
+    secrets: inherit
 
 permissions:
   id-token: write
@@ -22,7 +24,7 @@ concurrency:
 
 jobs:
   apply:
-    if: github.event.inputs.confirm == 'APPLY'
+    if: github.event_name == 'workflow_call' || (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'APPLY')
     environment: deploy
     runs-on: ubuntu-latest
     env:
@@ -177,3 +179,11 @@ jobs:
 
       - name: Apply root app-of-apps
         run: kubectl apply -f deploy/gitops/root-app.yaml
+
+      - name: Set SSM site mode to cluster (for deploy-main routing)
+        run: |
+          aws ssm put-parameter \
+            --name "/kubernetes-mono-app/site_mode" \
+            --value "cluster" \
+            --type String \
+            --overwrite

@@ -1,6 +1,7 @@
 # kubernetes-mono-app
 
 [![Build](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/ci.yaml)
+[![Deploy main](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/deploy-main.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/deploy-main.yaml)
 [![Static site](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/static-site-deploy.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/static-site-deploy.yaml)
 [![Terraform apply](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml)
 
@@ -20,7 +21,8 @@ Portfolio mono-repo: **Go API**, **portal** (`k8s.michaelj43.dev` landing + publ
 | Argo install | `infra/argocd/values.yaml` | Used only by bootstrap (Actions or Helm CLI) |
 | CI | `.github/workflows/ci.yaml` | `go test` (API + portal) on push/PR |
 | Images | `.github/workflows/kubernetes-images.yaml` | Manual: GHCR build + Kustomize pin (+ optional rollout) |
-| Static parked site | `.github/workflows/static-site-deploy.yaml`, `static/cluster-offline/` | Default on push to `main` when static/terraform paths change |
+| Deploy routing | `.github/workflows/deploy-main.yaml` | Push to `main`: SSM `site_mode` → Terraform apply vs static site (see `docs/github-actions.md`) |
+| Static parked site | `.github/workflows/static-site-deploy.yaml`, `static/cluster-offline/` | Manual or invoked by **deploy-main** when mode is **static** |
 | Runbooks | `docs/runbooks` | Bootstrap & teardown |
 
 Full design: **`plan.md`**.

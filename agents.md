@@ -14,7 +14,7 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 
 **GitHub Actions**
 
-- **Default on push to `main`**: **`static-site-deploy.yaml`** when **`static/cluster-offline/**` or **`infra/aws/parked_site/**`** change (S3 sync + CloudFront invalidation; Terraform **`parked_site`**).
+- **Push to `main`**: **`deploy-main.yaml`** reads SSM **`/kubernetes-mono-app/site_mode`** and calls **`terraform-apply`** (infra changes, mode **cluster**) or **`static-site-deploy`** (static paths, mode **static**). **`static-site-deploy`** is also available manually.
 - **CI tests**: **`ci.yaml`** on push/PR (Go only; no container build).
 - **Manual**: **`terraform-apply.yaml`** (EKS + **`github_deploy`** + Argo bootstrap), **`kubernetes-images.yaml`** (GHCR images + Kustomize pin + optional rollout), destroy / soft-destroy / full-destroy workflows — see **`docs/github-actions.md`**.
 - **Secrets** must not be committed in plaintext; patterns in docs and **`plan.md`** (e.g. §4.4).
