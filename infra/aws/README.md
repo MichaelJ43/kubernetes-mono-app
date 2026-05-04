@@ -25,7 +25,7 @@ Stacks share one **S3 backend** (different keys) and one **DynamoDB** lock table
 2. **`foundation`**: copy [`examples/foundation/terraform.tfvars.example`](examples/foundation/terraform.tfvars.example), including **`state_*`** and **`github_deploy_state_key`** matching your backend keys.
 3. **`k8s_platform`**: same pattern as before; **`foundation_state_key`** must match **`foundation`** state object key.
 
-Or run **Actions → Terraform apply** (confirm **`APPLY`**) once secrets exist — it applies **`github_deploy`** → **`foundation`** → **`k8s_platform`** → Argo CD.
+Or run **Actions → Terraform apply** once secrets exist (no workflow inputs) — it applies **`github_deploy`** → **`foundation`** → **`k8s_platform`** → Argo CD.
 
 ## Destroy order
 

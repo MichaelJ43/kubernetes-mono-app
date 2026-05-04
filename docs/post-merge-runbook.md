@@ -27,7 +27,7 @@ terraform init -backend-config=...   # key: <repo>/foundation/terraform.tfstate
 terraform apply
 ```
 
-**Or** use **Actions → Terraform apply** after secrets exist (confirm **`APPLY`**) — **manual**; it is not triggered by push to `main` (see [`github-actions.md`](github-actions.md)).
+**Or** use **Actions → Terraform apply** after secrets exist — **manual** (no workflow inputs); it is not triggered by push to `main` unless **`deploy-main`** path filters match (see [`github-actions.md`](github-actions.md)).
 
 **Copy outputs:** `github_actions_terraform_role_arn` from **`github_deploy`** (or **`foundation`** re-exports it) → ensure **`AWS_DEPLOY_ROLE_ARN`** matches. Foundation **state object** must exist in S3 before **`k8s_platform`** can run; **`github_deploy`** state must exist before **`foundation`**.
 
@@ -41,7 +41,7 @@ terraform init -backend-config=...   # key: <repo>/k8s-platform/terraform.tfstat
 terraform apply
 ```
 
-Or the same **Terraform apply** workflow (runs **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD + root app) — **manually** via **Actions** (confirm **`APPLY`**).
+Or the same **Terraform apply** workflow (runs **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD + root app) — **manually** via **Actions** (no form inputs).
 
 Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
 
