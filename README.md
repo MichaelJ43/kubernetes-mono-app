@@ -2,7 +2,7 @@
 
 [![Build](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/ci.yaml)
 [![Deploy AWS](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/deploy-aws.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/deploy-aws.yaml)
-[![Terraform apply](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/terraform-apply.yaml)
+[![Orchestrator Lambda](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/orchestrator-health.yaml/badge.svg?branch=main)](https://github.com/MichaelJ43/kubernetes-mono-app/actions/workflows/orchestrator-health.yaml)
 
 Portfolio mono-repo: **Go API**, **portal** (`k8s.michaelj43.dev` landing + public **`/status`**), **GitOps (Argo CD)**, **EKS-oriented manifests** (ALB Ingress, CloudNativePG, Redis), and **GitHub Actions** for CI plus Argo bootstrap/teardown.
 

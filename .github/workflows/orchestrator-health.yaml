@@ -1,0 +1,47 @@
+# Lightweight **Lambda presence check** for README badge (GitHub cannot query AWS directly).
+# Pass = orchestrator function exists and State is **Active**. Fail = missing or misconfigured.
+# Does **not** invoke **POST /deploy** or guarantee last deploy succeeded — use **Deploy AWS** workflow for that.
+
+name: Orchestrator health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *" # hourly at :17 UTC
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lambda:
+    # Skip forks (no AWS secrets); independent clones without creds will fail until configured.
+    if: ${{ !github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    environment: deploy
+    env:
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify orchestrator Lambda is Active
+        env:
+          PREFIX: ${{ github.event.repository.name }}-deploy-orc-
+        run: |
+          set -euo pipefail
+          FN=$(aws lambda list-functions --region "$AWS_REGION" \
+            --query "Functions[?starts_with(FunctionName, \`${PREFIX}\`)].FunctionName | [0]" \
+            --output text)
+          if [ -z "$FN" ] || [ "$FN" = "None" ]; then
+            echo "::error::No Lambda matching prefix ${PREFIX}"
+            exit 1
+          fi
+          echo "Found Lambda: $FN"
+          STATE=$(aws lambda get-function-configuration --region "$AWS_REGION" \
+            --function-name "$FN" --query State --output text)
+          echo "State=$STATE"
+          test "$STATE" = "Active"
