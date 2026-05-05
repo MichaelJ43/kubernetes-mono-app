@@ -3,6 +3,9 @@ name: Deploy AWS (bundle + orchestrator)
 # After **CI** succeeds on **main** (push): build/push images, render Kustomize into a tarball, upload to the
 # deploy **source** S3 bucket, **terraform apply** `deploy_orchestrator` (if needed), then **POST /deploy**
 # and poll the DynamoDB job row. Manual **workflow_dispatch** runs the same path.
+#
+# **Static-only (no EKS):** set repository variable **`DEPLOY_ORCHESTRATOR_EKS`** to **`false`** so
+# **`TF_VAR_enable_eks_integration=false`** (no foundation remote state / cluster required). Keep SSM **`site_mode=static`**.
 
 on:
   workflow_run:
@@ -34,6 +37,8 @@ jobs:
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
       CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'k8s-mono' }}
       DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      # When `false` or `0`, orchestrator skips EKS (parked/static deploys only). Unset = EKS on (default).
+      TF_VAR_enable_eks_integration: ${{ vars.DEPLOY_ORCHESTRATOR_EKS != 'false' && vars.DEPLOY_ORCHESTRATOR_EKS != '0' }}
     steps:
       - uses: actions/checkout@v4
         with:

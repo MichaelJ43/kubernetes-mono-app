@@ -65,6 +65,8 @@ Merge to **`main`**. **`ci.yaml`** runs Go tests; when it succeeds, **[`deploy-a
 
 **`deploy-aws`** does **not** commit Kustomize image bumps to Git by default (Argo’s Git view may lag the bundle unless you align tags manually).
 
+**No EKS (parked / static only):** set GitHub repository variable **`DEPLOY_ORCHESTRATOR_EKS`** to **`false`** and keep SSM **`site_mode=static`**. The orchestrator stack does not read **foundation** state or require a cluster.
+
 If the package is **private**, configure pull access (e.g. `imagePullSecrets` / GHCR PAT) — see [`runbooks/bootstrap.md`](runbooks/bootstrap.md).
 
 ## 6. Argo CD bootstrap

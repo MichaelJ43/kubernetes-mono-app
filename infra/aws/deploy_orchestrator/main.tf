@@ -4,6 +4,7 @@ locals {
 }
 
 data "terraform_remote_state" "foundation" {
+  count   = var.enable_eks_integration ? 1 : 0
   backend = "s3"
   config = {
     bucket         = var.state_bucket
@@ -28,7 +29,8 @@ data "terraform_remote_state" "parked_site" {
 data "aws_caller_identity" "current" {}
 
 data "aws_eks_cluster" "this" {
-  name = data.terraform_remote_state.foundation.outputs.cluster_name
+  count = var.enable_eks_integration ? 1 : 0
+  name  = data.terraform_remote_state.foundation[0].outputs.cluster_name
 }
 
 data "archive_file" "lambda_zip" {
@@ -95,7 +97,7 @@ resource "aws_iam_role" "lambda" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-data "aws_iam_policy_document" "lambda_policy" {
+data "aws_iam_policy_document" "lambda_core" {
   statement {
     sid = "Logs"
     actions = [
@@ -154,14 +156,6 @@ data "aws_iam_policy_document" "lambda_policy" {
   }
 
   statement {
-    sid = "EKS"
-    actions = [
-      "eks:DescribeCluster",
-    ]
-    resources = [data.aws_eks_cluster.this.arn]
-  }
-
-  statement {
     sid = "DynamoDBJobs"
     actions = [
       "dynamodb:PutItem",
@@ -180,10 +174,28 @@ data "aws_iam_policy_document" "lambda_policy" {
   }
 }
 
+data "aws_iam_policy_document" "lambda_eks" {
+  count = var.enable_eks_integration ? 1 : 0
+  statement {
+    sid = "EKS"
+    actions = [
+      "eks:DescribeCluster",
+    ]
+    resources = [data.aws_eks_cluster.this[0].arn]
+  }
+}
+
+data "aws_iam_policy_document" "lambda_merged" {
+  source_policy_documents = concat(
+    [data.aws_iam_policy_document.lambda_core.json],
+    var.enable_eks_integration ? [data.aws_iam_policy_document.lambda_eks[0].json] : []
+  )
+}
+
 resource "aws_iam_role_policy" "lambda" {
   name   = "deploy-orchestrator"
   role   = aws_iam_role.lambda.id
-  policy = data.aws_iam_policy_document.lambda_policy.json
+  policy = data.aws_iam_policy_document.lambda_merged.json
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
@@ -211,9 +223,10 @@ resource "aws_lambda_function" "orchestrator" {
       PARKED_BUCKET   = data.terraform_remote_state.parked_site.outputs.s3_bucket_id
       PARKED_CF_ID    = data.terraform_remote_state.parked_site.outputs.cloudfront_distribution_id
       JOB_TABLE       = aws_dynamodb_table.jobs.name
-      CLUSTER_NAME    = data.aws_eks_cluster.this.name
-      EKS_ENDPOINT    = data.aws_eks_cluster.this.endpoint
-      EKS_CA_B64      = data.aws_eks_cluster.this.certificate_authority[0].data
+      EKS_ENABLED     = var.enable_eks_integration ? "1" : "0"
+      CLUSTER_NAME    = var.enable_eks_integration ? data.aws_eks_cluster.this[0].name : ""
+      EKS_ENDPOINT    = var.enable_eks_integration ? data.aws_eks_cluster.this[0].endpoint : ""
+      EKS_CA_B64      = var.enable_eks_integration ? data.aws_eks_cluster.this[0].certificate_authority[0].data : ""
       AWS_REGION_NAME = var.aws_region
     }
   }
@@ -264,14 +277,16 @@ resource "aws_lambda_permission" "apigw" {
 }
 
 resource "aws_eks_access_entry" "lambda" {
-  cluster_name  = data.aws_eks_cluster.this.name
+  count         = var.enable_eks_integration ? 1 : 0
+  cluster_name  = data.aws_eks_cluster.this[0].name
   principal_arn = aws_iam_role.lambda.arn
   type          = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "lambda_admin" {
-  cluster_name  = aws_eks_access_entry.lambda.cluster_name
-  principal_arn = aws_eks_access_entry.lambda.principal_arn
+  count         = var.enable_eks_integration ? 1 : 0
+  cluster_name  = aws_eks_access_entry.lambda[0].cluster_name
+  principal_arn = aws_eks_access_entry.lambda[0].principal_arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 
   access_scope {
@@ -285,4 +300,14 @@ resource "aws_ssm_parameter" "deploy_api_url" {
   value = aws_apigatewayv2_api.http.api_endpoint
 
   overwrite = true
+}
+
+check "orchestrator_eks_requires_foundation_key" {
+  assert {
+    condition = (
+      !var.enable_eks_integration
+      || (var.foundation_state_key != null && var.foundation_state_key != "")
+    )
+    error_message = "When enable_eks_integration is true, foundation_state_key must be a non-empty S3 state key."
+  }
 }

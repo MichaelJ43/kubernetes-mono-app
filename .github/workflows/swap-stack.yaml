@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+      TF_VAR_enable_eks_integration: ${{ vars.DEPLOY_ORCHESTRATOR_EKS != 'false' && vars.DEPLOY_ORCHESTRATOR_EKS != '0' }}
     steps:
       - uses: actions/checkout@v4
 

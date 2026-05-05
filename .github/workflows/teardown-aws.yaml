@@ -22,6 +22,7 @@ jobs:
       TF_IN_AUTOMATION: true
       STATE_KEY_ORCHESTRATOR: ${{ github.event.repository.name }}/deploy-orchestrator/terraform.tfstate
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+      TF_VAR_enable_eks_integration: ${{ vars.DEPLOY_ORCHESTRATOR_EKS != 'false' && vars.DEPLOY_ORCHESTRATOR_EKS != '0' }}
     steps:
       - uses: actions/checkout@v4
 

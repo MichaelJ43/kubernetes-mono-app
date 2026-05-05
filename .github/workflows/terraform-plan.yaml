@@ -73,7 +73,7 @@ jobs:
       - name: Build deploy orchestrator Lambda package
         run: infra/aws/deploy_orchestrator/lambda/build.sh
 
-      - name: Terraform validate (deploy_orchestrator)
+      - name: Terraform validate (deploy_orchestrator, EKS on)
         working-directory: infra/aws/deploy_orchestrator
         env:
           TF_VAR_aws_region: us-east-1
@@ -81,7 +81,23 @@ jobs:
           TF_VAR_state_bucket: ci-placeholder
           TF_VAR_state_region: us-east-1
           TF_VAR_lock_table: ci-placeholder
+          TF_VAR_enable_eks_integration: true
           TF_VAR_foundation_state_key: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+          TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Terraform validate (deploy_orchestrator, static-only / no EKS)
+        working-directory: infra/aws/deploy_orchestrator
+        env:
+          TF_VAR_aws_region: us-east-1
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_state_bucket: ci-placeholder
+          TF_VAR_state_region: us-east-1
+          TF_VAR_lock_table: ci-placeholder
+          TF_VAR_enable_eks_integration: false
+          TF_VAR_foundation_state_key: ""
           TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
         run: |
           terraform init -backend=false -input=false

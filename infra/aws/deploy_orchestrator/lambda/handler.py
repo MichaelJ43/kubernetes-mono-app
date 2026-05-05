@@ -22,9 +22,10 @@ SOURCE_BUCKET = os.environ["SOURCE_BUCKET"]
 PARKED_BUCKET = os.environ["PARKED_BUCKET"]
 PARKED_CF_ID = os.environ["PARKED_CF_ID"]
 JOB_TABLE = os.environ["JOB_TABLE"]
-CLUSTER_NAME = os.environ["CLUSTER_NAME"]
-EKS_ENDPOINT = os.environ["EKS_ENDPOINT"]
-EKS_CA_B64 = os.environ["EKS_CA_B64"]
+EKS_ENABLED = os.environ.get("EKS_ENABLED", "0") == "1"
+CLUSTER_NAME = os.environ.get("CLUSTER_NAME", "")
+EKS_ENDPOINT = os.environ.get("EKS_ENDPOINT", "")
+EKS_CA_B64 = os.environ.get("EKS_CA_B64", "")
 
 ddb = boto3.client("dynamodb", region_name=REGION)
 ssm = boto3.client("ssm", region_name=REGION)
@@ -245,6 +246,11 @@ def run_deploy(job_id: str, payload: Dict[str, Any]) -> None:
     try:
         download_extract(bundle_key, extract)
         if mode == "cluster":
+            if not EKS_ENABLED:
+                raise RuntimeError(
+                    "site_mode is cluster but this orchestrator was deployed without EKS "
+                    "(enable_eks_integration=false). Use static mode or re-apply Terraform with EKS enabled."
+                )
             apply_k8s_bundle(extract)
         else:
             static_root = os.path.join(extract, "static")
@@ -267,6 +273,10 @@ def run_swap(job_id: str, payload: Dict[str, Any]) -> None:
 
     if force and not target_raw:
         new_mode = "static" if current == "cluster" else "cluster"
+        if new_mode == "cluster" and not EKS_ENABLED:
+            raise ValueError(
+                "Cannot switch to cluster mode: orchestrator has EKS integration disabled."
+            )
         put_site_mode(new_mode)
         update_job(job_id, "succeeded", f"force toggled site_mode to {new_mode}")
         return
@@ -275,6 +285,10 @@ def run_swap(job_id: str, payload: Dict[str, Any]) -> None:
         raise ValueError("target required unless force_toggle without target")
 
     target = norm_target(str(target_raw))
+    if target == "cluster" and not EKS_ENABLED:
+        raise ValueError(
+            "Cannot set site_mode to cluster: orchestrator has EKS integration disabled."
+        )
     if only_if and not force and current == target:
         update_job(job_id, "succeeded", "no-op: already on target")
         return
