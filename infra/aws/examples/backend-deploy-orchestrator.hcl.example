@@ -1,0 +1,6 @@
+# Example partial backend block for deploy_orchestrator (copy into terraform init -backend-config or CI).
+# bucket = "<your-tf-state-bucket>"
+# key    = "<repo-short-name>/deploy-orchestrator/terraform.tfstate"
+# region = "us-east-1"
+# dynamodb_table = "<your-lock-table>"
+# encrypt        = true

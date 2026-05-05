@@ -8,8 +8,9 @@ Stacks share one **S3 backend** (different keys) and one **DynamoDB** lock table
 | **foundation** | `infra/aws/foundation` | VPC, EKS, IRSA for AWS LB Controller, EKS access entries for **`github_deploy`** roles (IAM lookup by **`…-gha-*`** name). |
 | **k8s_platform** | `infra/aws/k8s_platform` | **Helm**: `aws-load-balancer-controller`; optional **ExternalDNS** when Route53 zone ID is set. |
 | **parked_site** | `infra/aws/parked_site` | S3 + CloudFront + optional Route53 for **`static/cluster-offline`** (parked / offline messaging). |
+| **deploy_orchestrator** | `infra/aws/deploy_orchestrator` | Source S3 bucket for release bundles, Lambda + HTTP API (**`POST /deploy`**, **`/swap`**, **`/teardown`**), DynamoDB job status. Reads **`parked_site`** remote state always; reads **`foundation`** only when CI passes a non-empty **`foundation_state_key`** (object exists in the state bucket). EKS access for the Lambda is enabled only when **`cluster_name`** from that state matches a live cluster in the account. |
 
-**Argo CD** is installed by **GitHub Actions** (`terraform-apply.yaml`) after **`k8s_platform`** — not by Terraform alone.
+**Argo CD** is installed by **GitHub Actions** (`terraform-apply.yaml`) after **`k8s_platform`** — not by Terraform alone. Application rollouts also run via **`deploy-aws`** when SSM **`site_mode=cluster`** (bundle apply).
 
 ## Prerequisites
 

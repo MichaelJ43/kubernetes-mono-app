@@ -3,7 +3,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project   = "kubernetes-mono-app"
+      project   = "kubernetes-mono-app"
       ManagedBy = "terraform"
     }
   }

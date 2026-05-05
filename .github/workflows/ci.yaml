@@ -1,7 +1,6 @@
 name: CI
 
-# Tests on push/PR. Container image build + Kustomize pin + optional EKS rollout are **manual**:
-# run workflow **kubernetes-images** (Actions → Kubernetes images & deploy pin).
+# Tests on push/PR. After CI succeeds on **main**, **deploy-aws** builds images, uploads a bundle, and invokes the deploy orchestrator (see **docs/github-actions.md**).
 
 on:
   push:

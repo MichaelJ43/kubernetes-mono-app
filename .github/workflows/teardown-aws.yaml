@@ -1,0 +1,120 @@
+name: Teardown AWS orchestrator
+
+# Invokes **POST /teardown** with **scope=both** (clears parked content; see Lambda behavior), polls for completion,
+# then **terraform destroy** on **deploy_orchestrator** (removes source bucket, Lambda, API, etc.).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: teardown-aws-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  teardown:
+    environment: deploy
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: true
+      STATE_KEY_ORCHESTRATOR: ${{ github.event.repository.name }}/deploy-orchestrator/terraform.tfstate
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AWS deploy role and Terraform backend secrets
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          LOCK: ${{ secrets.TF_LOCK_TABLE }}
+        run: |
+          err=0
+          if [ -z "$ARN" ]; then echo "::error::AWS_DEPLOY_ROLE_ARN is not set."; err=1; fi
+          if [ -z "$BUCKET" ]; then echo "::error::TF_STATE_BUCKET is not set."; err=1; fi
+          if [ -z "$LOCK" ]; then echo "::error::TF_LOCK_TABLE is not set."; err=1; fi
+          exit "$err"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve foundation state key (optional EKS)
+        id: foundation_key
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          KEY: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+        run: |
+          set -euo pipefail
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "tf_key=$KEY" >> "$GITHUB_OUTPUT"
+          else
+            echo "tf_key=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Terraform init (deploy_orchestrator)
+        working-directory: infra/aws/deploy_orchestrator
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_foundation_state_key: ${{ steps.foundation_key.outputs.tf_key }}
+          TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.STATE_KEY_ORCHESTRATOR }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Invoke Lambda teardown (scope=both) and poll
+        run: |
+          set -euo pipefail
+          API_BASE=$(aws ssm get-parameter --name /kubernetes-mono-app/deploy_orchestrator_api_url --query Parameter.Value --output text)
+          RESP=$(curl -sS -X POST "${API_BASE}/teardown" \
+            -H "Content-Type: application/json" \
+            -d '{"scope":"both"}')
+          echo "$RESP"
+          JOB_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
+          TABLE=$(terraform -chdir=infra/aws/deploy_orchestrator output -raw jobs_table_name)
+          for i in $(seq 1 120); do
+            ST=$(aws dynamodb get-item --table-name "$TABLE" --key "{\"job_id\":{\"S\":\"${JOB_ID}\"}}" \
+              --query 'Item.status.S' --output text 2>/dev/null || echo "")
+            if [ "$ST" = "succeeded" ]; then
+              echo "Teardown job succeeded."
+              exit 0
+            fi
+            if [ "$ST" = "failed" ]; then
+              DET=$(aws dynamodb get-item --table-name "$TABLE" --key "{\"job_id\":{\"S\":\"${JOB_ID}\"}}" \
+                --query 'Item.detail.S' --output text)
+              echo "::error::Teardown job failed: ${DET}"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "::error::Timed out waiting for teardown job"
+          exit 1
+
+      - name: Terraform destroy (deploy_orchestrator)
+        working-directory: infra/aws/deploy_orchestrator
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_foundation_state_key: ${{ steps.foundation_key.outputs.tf_key }}
+          TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
+        run: terraform destroy -input=false -auto-approve

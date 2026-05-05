@@ -1,0 +1,131 @@
+name: Swap stack (orchestrator)
+
+# Calls **POST /swap** on the deploy orchestrator HTTP API (URL from SSM) and polls the job to completion.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: kubernetes | static (ignored if force_toggle without target)
+        required: false
+        type: string
+        default: ""
+      only_if_inactive:
+        description: If true, no-op when already on target (unless force_toggle)
+        required: false
+        type: boolean
+        default: false
+      force_toggle:
+        description: If true with empty target, flip cluster<->static; if true with target, set target regardless of only_if_inactive
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: swap-stack-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  swap:
+    environment: deploy
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require AWS deploy role
+        env:
+          ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ARN" ]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN is not set."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve foundation state key (optional EKS)
+        id: foundation_key
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          KEY: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+        run: |
+          set -euo pipefail
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "tf_key=$KEY" >> "$GITHUB_OUTPUT"
+          else
+            echo "tf_key=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Read orchestrator outputs (job table)
+        working-directory: infra/aws/deploy_orchestrator
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_region: ${{ env.AWS_REGION }}
+          TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
+          TF_VAR_foundation_state_key: ${{ steps.foundation_key.outputs.tf_key }}
+          TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ github.event.repository.name }}/deploy-orchestrator/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Invoke swap and poll
+        env:
+          TARGET: ${{ inputs.target }}
+          ONLY_IF: ${{ inputs.only_if_inactive }}
+          FORCE: ${{ inputs.force_toggle }}
+        run: |
+          set -euo pipefail
+          API_BASE=$(aws ssm get-parameter --name /kubernetes-mono-app/deploy_orchestrator_api_url --query Parameter.Value --output text)
+          BODY=$(python3 << PY
+          import json, os
+          d = {}
+          t = os.environ.get("TARGET", "").strip()
+          if t:
+              d["target"] = t
+          d["only_if_inactive"] = os.environ.get("ONLY_IF", "false").lower() == "true"
+          d["force_toggle"] = os.environ.get("FORCE", "false").lower() == "true"
+          print(json.dumps(d))
+          PY
+          )
+          RESP=$(curl -sS -X POST "${API_BASE}/swap" -H "Content-Type: application/json" -d "$BODY")
+          echo "$RESP"
+          JOB_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
+          TABLE=$(terraform -chdir=infra/aws/deploy_orchestrator output -raw jobs_table_name)
+          for i in $(seq 1 120); do
+            ST=$(aws dynamodb get-item --table-name "$TABLE" --key "{\"job_id\":{\"S\":\"${JOB_ID}\"}}" \
+              --query 'Item.status.S' --output text 2>/dev/null || echo "")
+            if [ "$ST" = "succeeded" ]; then
+              echo "Swap job succeeded."
+              exit 0
+            fi
+            if [ "$ST" = "failed" ]; then
+              DET=$(aws dynamodb get-item --table-name "$TABLE" --key "{\"job_id\":{\"S\":\"${JOB_ID}\"}}" \
+                --query 'Item.detail.S' --output text)
+              echo "::error::Swap job failed: ${DET}"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "::error::Timed out waiting for swap job"
+          exit 1
