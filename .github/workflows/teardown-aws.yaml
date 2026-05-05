@@ -22,7 +22,6 @@ jobs:
       TF_IN_AUTOMATION: true
       STATE_KEY_ORCHESTRATOR: ${{ github.event.repository.name }}/deploy-orchestrator/terraform.tfstate
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
-      TF_VAR_enable_eks_integration: ${{ vars.DEPLOY_ORCHESTRATOR_EKS != 'false' && vars.DEPLOY_ORCHESTRATOR_EKS != '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +43,19 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Resolve foundation state key (optional EKS)
+        id: foundation_key
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          KEY: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+        run: |
+          set -euo pipefail
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "tf_key=$KEY" >> "$GITHUB_OUTPUT"
+          else
+            echo "tf_key=" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
@@ -57,7 +69,7 @@ jobs:
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
-          TF_VAR_foundation_state_key: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+          TF_VAR_foundation_state_key: ${{ steps.foundation_key.outputs.tf_key }}
           TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
         run: |
           terraform init -input=false \
@@ -103,6 +115,6 @@ jobs:
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
-          TF_VAR_foundation_state_key: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+          TF_VAR_foundation_state_key: ${{ steps.foundation_key.outputs.tf_key }}
           TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
         run: terraform destroy -input=false -auto-approve

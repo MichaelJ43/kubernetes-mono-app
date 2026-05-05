@@ -15,7 +15,7 @@ Use this file along with `plan.md` (authoritative product/architecture blueprint
 
 **GitHub Actions**
 
-- **Push to `main`**: **`ci.yaml`** runs tests; on success **`deploy-aws.yaml`** builds/pushes images, uploads a release bundle to the orchestrator source bucket, applies **`deploy_orchestrator`**, and invokes **`POST /deploy`** (routes to EKS vs parked static using SSM **`/kubernetes-mono-app/site_mode`**). Repository variable **`DEPLOY_ORCHESTRATOR_EKS=false`** turns off EKS integration (static-only; no live cluster).
+- **Push to `main`**: **`ci.yaml`** runs tests; on success **`deploy-aws.yaml`** builds/pushes images, uploads a release bundle to the orchestrator source bucket, applies **`deploy_orchestrator`**, and invokes **`POST /deploy`**. The Lambda reads SSM **`/kubernetes-mono-app/site_mode`**: **static** → parked S3 + CloudFront; **cluster** → apply bundle to EKS when a cluster is wired (foundation state present + cluster name still exists in AWS). No extra repository variables are required for static-only.
 - **Manual AWS**: **`swap-stack.yaml`**, **`teardown-aws.yaml`**, **`terraform-apply.yaml`**, destroy / soft-destroy / Argo bootstrap & teardown — see **`docs/github-actions.md`**.
 - **Secrets** must not be committed in plaintext; patterns in docs and **`plan.md`**.
 

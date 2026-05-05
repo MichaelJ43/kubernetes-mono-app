@@ -4,8 +4,9 @@ name: Deploy AWS (bundle + orchestrator)
 # deploy **source** S3 bucket, **terraform apply** `deploy_orchestrator` (if needed), then **POST /deploy**
 # and poll the DynamoDB job row. Manual **workflow_dispatch** runs the same path.
 #
-# **Static-only (no EKS):** set repository variable **`DEPLOY_ORCHESTRATOR_EKS`** to **`false`** so
-# **`TF_VAR_enable_eks_integration=false`** (no foundation remote state / cluster required). Keep SSM **`site_mode=static`**.
+# If there is **no** `foundation` state object in the TF state bucket, **`TF_VAR_foundation_state_key`** is left
+# empty so the orchestrator is created **without** EKS. The Lambda still runs **`POST /deploy`**; it reads SSM
+# **`site_mode`** and runs the **static** path when **`static`** (parked S3 + CloudFront).
 
 on:
   workflow_run:
@@ -37,8 +38,6 @@ jobs:
       AWS_REGION: ${{ secrets.TF_STATE_REGION || 'us-east-1' }}
       CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'k8s-mono' }}
       DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-      # When `false` or `0`, orchestrator skips EKS (parked/static deploys only). Unset = EKS on (default).
-      TF_VAR_enable_eks_integration: ${{ vars.DEPLOY_ORCHESTRATOR_EKS != 'false' && vars.DEPLOY_ORCHESTRATOR_EKS != '0' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,6 +64,20 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve foundation state key (optional EKS)
+        id: foundation_key
+        env:
+          BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          KEY: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+        run: |
+          set -euo pipefail
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" --region "${{ env.AWS_REGION }}" 2>/dev/null; then
+            echo "tf_key=$KEY" >> "$GITHUB_OUTPUT"
+          else
+            echo "tf_key=" >> "$GITHUB_OUTPUT"
+            echo "::notice::No foundation state object in s3://$BUCKET/$KEY — deploy_orchestrator will run without EKS (Lambda uses SSM site_mode; static path when site_mode=static)."
+          fi
 
       - uses: docker/setup-buildx-action@v3
       - name: GHCR image path (lowercase)
@@ -128,7 +141,7 @@ jobs:
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_region: ${{ env.AWS_REGION }}
           TF_VAR_lock_table: ${{ secrets.TF_LOCK_TABLE }}
-          TF_VAR_foundation_state_key: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+          TF_VAR_foundation_state_key: ${{ steps.foundation_key.outputs.tf_key }}
           TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
         run: |
           terraform init -input=false \

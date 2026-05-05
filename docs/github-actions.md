@@ -86,7 +86,7 @@ Derived from the repository **short name** (`github.event.repository.name`):
 3. Apply **`parked_site`** at least once so its state includes **bucket** and **CloudFront** outputs (required by **`deploy_orchestrator`** remote state).
 4. Run **`deploy-aws`** (or apply **`deploy_orchestrator`** manually) so the Lambda, source bucket, and HTTP API exist.
 
-**Static-only (no EKS, e.g. after soft-destroy):** set repository variable **`DEPLOY_ORCHESTRATOR_EKS`** to **`false`**. Ensure SSM **`/kubernetes-mono-app/site_mode`** is **`static`**. You do **not** need **foundation** / EKS state for **`deploy_orchestrator`** in that mode. To use **cluster** mode again later, recreate EKS (**Terraform apply**), set **`DEPLOY_ORCHESTRATOR_EKS`** back to unset/`true`, and **`terraform apply`** **`deploy_orchestrator`** to re-enable EKS access.
+**Static-only (no EKS, e.g. after soft-destroy):** ensure SSM **`/kubernetes-mono-app/site_mode`** is **`static`**. **`deploy-aws`** checks whether the **foundation** state object exists in your TF state bucket; if not, it passes an **empty** **`foundation_state_key`** so **`deploy_orchestrator`** is created **without** EKS. If the object exists, Terraform reads **`cluster_name`** from that state and only enables EKS when a cluster with that name **still exists** in the account. The Lambda **`POST /deploy`** always runs; it reads **`site_mode`** and performs the **static** path (parked S3 + CloudFront) when **`static`**.
 
 **Migrating from IAM embedded in `foundation`**
 
@@ -119,8 +119,6 @@ Optional convenience:
 |------|---------|-------|
 | **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | Used by **`soft-destroy`**, **`full-undeploy`**, and **`github_deploy`** **`TF_VAR_cluster_name`** in **`terraform-apply`**; defaults to **`k8s-mono`** when unset. |
 | **`EKS_AWS_REGION`** | `us-east-1` | Optional; region hints for scripts if you add them. |
-| **`DEPLOY_ORCHESTRATOR_EKS`** | `false` or `0` to disable | When unset or any other value, **`deploy_orchestrator`** integrates with **EKS** (reads **foundation** remote state, Lambda gets cluster API access). Set to **`false`** (or **`0`**) for **static-only** operation: no live cluster required; keep SSM **`site_mode=static`**. **`deploy-aws`**, **`swap-stack`**, and **`teardown-aws`** all pass **`TF_VAR_enable_eks_integration`** from this variable. |
-
 **`terraform-apply.yaml`** uses **`EKS_CLUSTER_NAME`** (or **`k8s-mono`**) for **`TF_VAR_cluster_name`** on **`github_deploy`** so IAM role names stay aligned with **`foundation`**.
 
 ## First-time chicken-and-egg

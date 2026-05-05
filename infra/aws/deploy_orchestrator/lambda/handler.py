@@ -248,8 +248,9 @@ def run_deploy(job_id: str, payload: Dict[str, Any]) -> None:
         if mode == "cluster":
             if not EKS_ENABLED:
                 raise RuntimeError(
-                    "site_mode is cluster but this orchestrator was deployed without EKS "
-                    "(enable_eks_integration=false). Use static mode or re-apply Terraform with EKS enabled."
+                    "site_mode is cluster but this orchestrator has no EKS integration "
+                    "(no live cluster matched foundation state). Use static mode or run Terraform apply "
+                    "for foundation/EKS and re-apply deploy_orchestrator."
                 )
             apply_k8s_bundle(extract)
         else:
