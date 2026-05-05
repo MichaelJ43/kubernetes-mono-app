@@ -27,7 +27,7 @@ terraform init -backend-config=...   # key: <repo>/foundation/terraform.tfstate
 terraform apply
 ```
 
-**Or** use **Actions → Terraform apply** after secrets exist — **manual** (no workflow inputs); it is not triggered by push to `main` unless **`deploy-main`** path filters match (see [`github-actions.md`](github-actions.md)).
+**Or** use **Actions → Terraform apply** after secrets exist — **manual** (no workflow inputs); it is not triggered automatically on push to `main` (see [`github-actions.md`](github-actions.md)).
 
 **Copy outputs:** `github_actions_terraform_role_arn` from **`github_deploy`** (or **`foundation`** re-exports it) → ensure **`AWS_DEPLOY_ROLE_ARN`** matches. Foundation **state object** must exist in S3 before **`k8s_platform`** can run; **`github_deploy`** state must exist before **`foundation`**.
 
@@ -45,6 +45,10 @@ Or the same **Terraform apply** workflow (runs **`github_deploy`**, **`foundatio
 
 Set repository **Secret** **`TF_ROUTE53_HOSTED_ZONE_ID`** to your Route 53 hosted zone ID for **`k8s.…`** so **k8s_platform** installs ExternalDNS and creates **`api.k8s…`** automatically (see [`aws-domain-tls.md`](aws-domain-tls.md)).
 
+## 2b. Terraform: `parked_site` (before `deploy_orchestrator`)
+
+Apply **`infra/aws/parked_site`** so **`deploy_orchestrator`** can read **bucket** and **CloudFront** IDs from remote state. Use the same S3 backend; state key **`<repo>/parked-site/terraform.tfstate`**. If you upgraded the repo and this is the first apply with **outputs**, run **`terraform apply`** again on **`parked_site`** so the state is complete.
+
 ## 3. Domain, ACM, DNS
 
 Follow **[`aws-domain-tls.md`](aws-domain-tls.md)** (hosted zone, ACM in **ALB region**, validation records).
@@ -55,13 +59,11 @@ The default **Ingress** uses **ALB certificate discovery**: ensure an **ISSUED**
 
 If you change the hostname, edit **`deploy/base/api/ingress.yaml`** (`spec.tls.hosts` and `rules[].host`) and push.
 
-## 5. Image on GHCR
+## 5. CI on `main` + **deploy-aws** (images + bundle + Lambda deploy)
 
-Run **Actions → Kubernetes images & deploy pin** ([`kubernetes-images.yaml`](../.github/workflows/kubernetes-images.yaml)). That workflow **pushes** `ghcr.io/<lowercase-owner>/kubernetes-mono-app/{api,portal}:<sha>` (and `:latest`), then **`pin-images`** commits **`deploy/base/*/kustomization.yaml`** so **`images[].newTag`** is that **`<sha>`** (requires **Actions → Workflow permissions → Read and write** so the workflow can push).
+Merge to **`main`**. **`ci.yaml`** runs Go tests; when it succeeds, **[`deploy-aws.yaml`](../.github/workflows/deploy-aws.yaml)** runs: it **pushes** `ghcr.io/<lowercase-owner>/kubernetes-mono-app/{api,portal}:<sha>` and `:latest`, renders **`deploy/base/api`** and **`deploy/base/portal`** into **`k8s/*.yaml`**, adds **`static/cluster-offline`**, uploads a tarball to the orchestrator **source** bucket, **`terraform apply`** **`infra/aws/deploy_orchestrator`**, then **`POST /deploy`**. The Lambda reads SSM **`/kubernetes-mono-app/site_mode`**: **`cluster`** applies the bundle to EKS; **`static`** syncs **`static/`** to the parked bucket and invalidates CloudFront.
 
-Optional **`rollout`** job runs when repository variable **`EKS_CLUSTER_NAME`** is set.
-
-Push to **`main`** still runs **`ci.yaml`** tests only (no automatic image build).
+**`deploy-aws`** does **not** commit Kustomize image bumps to Git by default (Argo’s Git view may lag the bundle unless you align tags manually).
 
 If the package is **private**, configure pull access (e.g. `imagePullSecrets` / GHCR PAT) — see [`runbooks/bootstrap.md`](runbooks/bootstrap.md).
 
@@ -85,7 +87,7 @@ Prefer **ExternalDNS** from **`k8s_platform`**: set **`TF_ROUTE53_HOSTED_ZONE_ID
 kubectl get applications -n argocd
 kubectl -n portfolio get pods,ingress
 curl -fsS https://api.k8s.michaelj43.dev/health   # API Ingress
-curl -fsS https://k8s.michaelj43.dev/health       # portal (after CI pushed portal image + Argo synced)
+curl -fsS https://k8s.michaelj43.dev/health       # portal (after deploy-aws pushed image + apply/sync)
 xdg-open https://k8s.michaelj43.dev/status 2>/dev/null || true   # or open in a browser — Argo app names / health / sync
 ```
 

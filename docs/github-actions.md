@@ -8,36 +8,49 @@ Workflows use two environments so you can scope **secrets**, **protection rules*
 
 | Environment | Workflows |
 |-------------|-----------|
-| **`build`** | **`ci.yaml`** — Go tests only. **`kubernetes-images.yaml`** — manual GHCR build, Kustomize pin, optional rollout. |
-| **`deploy`** | **`deploy-main.yaml`**, **`terraform-apply.yaml`**, **`terraform-destroy.yaml`**, **`full-undeploy.yaml`**, **`static-site-deploy.yaml`**, **`soft-destroy.yaml`**, **`aws-full-destroy.yaml`**, **`argocd-bootstrap.yaml`**, **`argocd-teardown.yaml`**. |
+| **`build`** | **`ci.yaml`** — Go tests on push/PR. |
+| **`deploy`** | **`deploy-aws.yaml`**, **`swap-stack.yaml`**, **`teardown-aws.yaml`**, **`terraform-apply.yaml`**, **`terraform-destroy.yaml`**, **`full-undeploy.yaml`**, **`soft-destroy.yaml`**, **`aws-full-destroy.yaml`**, **`argocd-bootstrap.yaml`**, **`argocd-teardown.yaml`**. |
 
 Create **`build`** and **`deploy`** under **Settings → Environments**. Add **required reviewers** or **wait timers** on **`deploy`** for destructive paths. Repository secrets are available in environments unless you override with environment-specific secrets.
 
-## SSM `site_mode` (auto deploy on merge to `main`)
+## SSM parameters
+
+### `site_mode` (which stack the orchestrator targets)
 
 Parameter name (String): **`/kubernetes-mono-app/site_mode`**
 
 | Value | Meaning |
 |-------|---------|
-| **`cluster`** (default when parameter is missing) | Live EKS: **`deploy-main`** runs **`terraform-apply`** only when **`infra/aws/**`** (or related workflow files) change. **Argo CD** still reconciles app changes from Git without a deploy workflow. |
-| **`static`** | Parked mode: **`deploy-main`** runs **`static-site-deploy`** only when **`static/cluster-offline/**`**, **`infra/aws/parked_site/**`**, or the static workflow file change. |
+| **`cluster`** (default when the parameter is missing) | **`deploy-aws`** applies the **Kubernetes** objects from the release bundle (API + portal manifests) to EKS. |
+| **`static`** | **`deploy-aws`** syncs **`static/cluster-offline`** from the bundle to the **parked** S3 bucket and invalidates CloudFront. |
 
 **Who sets it**
 
-- **`terraform-apply.yaml`** (manual or called from **`deploy-main`**) sets **`cluster`** after a successful apply (including Argo bootstrap).
+- **`terraform-apply.yaml`** sets **`cluster`** after a successful apply (including Argo bootstrap).
 - **`soft-destroy.yaml`** sets **`static`** after **`foundation`** destroy completes.
+- **`swap-stack.yaml`** (orchestrator **POST /swap**) updates it when you change the active stack.
 
-The deploy role needs **`ssm:GetParameter`** and **`ssm:PutParameter`** on that name (AdministratorAccess includes this).
+The deploy role needs **`ssm:GetParameter`** and **`ssm:PutParameter`** on **`/kubernetes-mono-app/*`** (AdministratorAccess includes this).
 
-## Default vs manual deploy paths
+### `deploy_orchestrator_api_url`
+
+Written by Terraform **`deploy_orchestrator`**: **`/kubernetes-mono-app/deploy_orchestrator_api_url`** — base URL of the HTTP API (**`POST /deploy`**, **`/swap`**, **`/teardown`**). Workflows read it with **`aws ssm get-parameter`**.
+
+## Primary AWS workflows (three)
+
+| Workflow | When | What |
+|----------|------|------|
+| **`deploy-aws.yaml`** | After **`CI`** succeeds on a push to **`main`**, or **`workflow_dispatch`** | Build/push API + portal to GHCR, render Kustomize into **`k8s/*.yaml`**, tarball with **`static/`**, upload to the orchestrator **source** S3 bucket, **`terraform apply`** **`infra/aws/deploy_orchestrator`**, **`POST /deploy`**, poll DynamoDB job status. |
+| **`swap-stack.yaml`** | **`workflow_dispatch`** | **`POST /swap`** with optional inputs (`target`, `only_if_inactive`, `force_toggle`); poll job. |
+| **`teardown-aws.yaml`** | **`workflow_dispatch`** (destructive) | **`POST /teardown`** with **`scope=both`**, poll, then **`terraform destroy`** **`deploy_orchestrator`** (removes source bucket, Lambda, API Gateway, etc.). |
+
+## Platform lifecycle (still manual)
 
 | What | How it runs |
 |------|-------------|
-| **Push to `main` (routed)** | **`deploy-main.yaml`** reads SSM, then calls **`terraform-apply`** or **`static-site-deploy`** via **`workflow_call`** when paths match (see above). |
-| **Redeploy on `main` without a diff** | **Actions → Deploy main** (`workflow_dispatch`, no inputs) — treats infra and static paths as changed so the matching child workflow(s) run for the current SSM **`site_mode`**. |
-| **Static parked site** (manual) | **Actions → Static site deploy** — same steps as the static branch of **`deploy-main`** (no workflow inputs). |
-| **EKS / Terraform / Argo** (manual) | **Actions → Terraform apply** — same stack as **`deploy-main`**’s cluster path; no form inputs (region from **`TF_STATE_REGION`**, cluster from **`EKS_CLUSTER_NAME`** / default **`k8s-mono`**). |
-| **Images + Kustomize pin** | **`kubernetes-images.yaml`** (`workflow_dispatch`). |
+| **EKS / VPC / IAM OIDC / Argo bootstrap** | **Actions → Terraform apply** — **`workflow_dispatch`** only; applies **`github_deploy`** → **`foundation`** → **`k8s_platform`**, then Argo CD Helm + root app; sets SSM **`site_mode=cluster`**. |
+| **Parked site infra** (S3 + CloudFront) | Apply **`infra/aws/parked_site`** locally or via your process; **`deploy_orchestrator`** reads **parked_site** remote state (must exist **before** first orchestrator apply). |
+| **Deploy orchestrator** (Lambda + source bucket + API) | First **`deploy-aws`** run (or manual **`terraform apply`** in **`infra/aws/deploy_orchestrator`**). |
 
 ## Secrets (`Settings → Secrets and variables → Actions → Secrets`)
 
@@ -64,11 +77,14 @@ Derived from the repository **short name** (`github.event.repository.name`):
 | **foundation** | `<repo>/foundation/terraform.tfstate` |
 | **k8s_platform** | `<repo>/k8s-platform/terraform.tfstate` |
 | **parked_site** | `<repo>/parked-site/terraform.tfstate` |
+| **deploy_orchestrator** | `<repo>/deploy-orchestrator/terraform.tfstate` |
 
 **Bootstrap order for a new account / clone**
 
 1. Apply **`github_deploy`** first (locally with backend config, or **`terraform-apply`**). Until those IAM roles exist (**`<cluster_name>-gha-terraform`** etc.), **`foundation`** cannot plan/apply (it looks up the roles by name).
 2. **`terraform-apply.yaml`** (manual) runs **`github_deploy`** → **`foundation`** → **`k8s_platform`** → Argo CD + root app.
+3. Apply **`parked_site`** at least once so its state includes **bucket** and **CloudFront** outputs (required by **`deploy_orchestrator`** remote state).
+4. Run **`deploy-aws`** (or apply **`deploy_orchestrator`** manually) so the Lambda, source bucket, and HTTP API exist.
 
 **Migrating from IAM embedded in `foundation`**
 
@@ -77,14 +93,8 @@ If your account already has **`github_deploy`**-equivalent IAM **inside** an old
 ### When **Terraform apply** runs
 
 - **Manual** — **Actions → Terraform apply** (`workflow_dispatch`, no inputs).
-- **Automatic** — **`deploy-main`** calls it on push to **`main`** (or manual **`deploy-main`**) when SSM **`site_mode`** is **`cluster`** and path filters show **infra** changes.
 
-In both cases it applies **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD Helm + root app, then writes SSM **`site_mode=cluster`**.
-
-### Static site deploy
-
-- **Actions → Static site deploy** (`workflow_dispatch`) — same steps as **`deploy-main`** when SSM **`site_mode=static`** and static paths change.
-- Applies **`parked_site`** (no Route53 record management by default), uploads assets with correct **`Content-Type`** for **`.json`**, invalidates CloudFront.
+It applies **`github_deploy`**, **`foundation`**, **`k8s_platform`**, then Argo CD Helm + root app, then writes SSM **`site_mode=cluster`**.
 
 ### Soft destroy (park EKS, keep GitHub IAM)
 
@@ -105,8 +115,8 @@ Optional convenience:
 
 | Name | Example | Notes |
 |------|---------|-------|
-| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | Used by **`kubernetes-images`** rollout, **`soft-destroy`**, **`full-undeploy`**, and **`github_deploy`** **`TF_VAR_cluster_name`** in **`terraform-apply`**; defaults to **`k8s-mono`** when unset. |
-| **`EKS_AWS_REGION`** | `us-east-1` | Region for **`aws eks update-kubeconfig`** in **`kubernetes-images`**. |
+| **`EKS_CLUSTER_NAME`** | same as foundation `cluster_name` | Used by **`soft-destroy`**, **`full-undeploy`**, and **`github_deploy`** **`TF_VAR_cluster_name`** in **`terraform-apply`**; defaults to **`k8s-mono`** when unset. |
+| **`EKS_AWS_REGION`** | `us-east-1` | Optional; region hints for scripts if you add them. |
 
 **`terraform-apply.yaml`** uses **`EKS_CLUSTER_NAME`** (or **`k8s-mono`**) for **`TF_VAR_cluster_name`** on **`github_deploy`** so IAM role names stay aligned with **`foundation`**.
 
@@ -117,12 +127,13 @@ GitHub OIDC IAM is created by **`github_deploy`**, not **`foundation`**. Until *
 1. Configure S3 backend and run **`github_deploy`** (same bucket/key pattern as above).
 2. Set **`AWS_DEPLOY_ROLE_ARN`**, **`TF_STATE_BUCKET`**, **`TF_LOCK_TABLE`**.
 3. Run **`terraform-apply.yaml`** from **Actions**, or apply **`foundation`** / **`k8s_platform`** locally using **`infra/aws/examples/`**.
+4. Apply **`parked_site`**, then use **`deploy-aws`** for ongoing releases.
 
-## CI image push and deploy pins (manual)
+## CI and deploy-aws
 
-**`kubernetes-images.yaml`** is **`workflow_dispatch`** only: build/push API and portal to GHCR, **`kustomize edit set image`**, commit **`[skip ci]`**, optional **`rollout`** when **`EKS_CLUSTER_NAME`** is set.
+**`ci.yaml`** runs tests on push/PR. On **`main`**, when **CI** completes successfully, **`deploy-aws`** runs (same repo, **`workflow_run`**). It does **not** commit Kustomize image tag changes to Git; tags are set in the runner and baked into the bundle only.
 
-Repository **Actions → General → Workflow permissions** must allow **read and write** for **`pin-images`** to push the commit.
+Repository **Actions → General → Workflow permissions** must allow **packages: write** (default **`GITHUB_TOKEN`**) for GHCR pushes from **`deploy-aws`**.
 
 ## What is not stored in GitHub or AWS Secrets Manager here
 
@@ -136,8 +147,10 @@ Repository **Actions → General → Workflow permissions** must allow **read an
 
 2. **`parked_site` / static deploy: invalid ACM** — CloudFront requires an **ISSUED** cert in **`us-east-1`** covering your **`parked_aliases`**. Reuse **`TF_ACM_CERTIFICATE_ARN`** when it already points at that cert.
 
-3. **Fork PRs** — OIDC plan jobs only run for same-repo PRs. **`validate`** (fmt/validate) still runs.
+3. **`deploy_orchestrator` plan/apply fails on remote state** — Ensure **`parked_site`** state exists in S3 and has been **re-applied** at least once after outputs (**`s3_bucket_id`**, **`cloudfront_distribution_id`**) were added.
 
-4. **EKS access** — Deploy role must have an **EKS access entry**; **`foundation`** wires **`AWS_DEPLOY_ROLE_ARN`** via **`github_deploy`** role ARNs.
+4. **Fork PRs** — OIDC plan jobs only run for same-repo PRs. **`validate`** (fmt/validate) still runs.
 
-5. **`terraform plan` on PR** — If **`github_deploy`** state is **missing** in S3, the **foundation** plan step is **skipped** (notice in logs) so the PR stays green; run **`github_deploy`** / **Terraform apply** once, then re-run the plan check.
+5. **EKS access** — Deploy role must have an **EKS access entry**; **`foundation`** wires **`AWS_DEPLOY_ROLE_ARN`** via **`github_deploy`** role ARNs. The orchestrator Lambda gets its own access entry from **`deploy_orchestrator`**.
+
+6. **`terraform plan` on PR** — If **`github_deploy`** state is **missing** in S3, the **foundation** plan step is **skipped** (notice in logs) so the PR stays green; run **`github_deploy`** / **Terraform apply** once, then re-run the plan check.

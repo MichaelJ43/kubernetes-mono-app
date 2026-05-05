@@ -19,7 +19,8 @@ resource "aws_iam_openid_connect_provider" "github" {
   ]
 
   tags = {
-    Name = "github-actions-oidc"
+    Name    = "github-actions-oidc"
+    project = "kubernetes-mono-app"
   }
 }
 

@@ -9,7 +9,9 @@ on:
     paths:
       - 'infra/aws/**'
       - '.github/workflows/terraform-plan.yaml'
-      - '.github/workflows/deploy-main.yaml'
+      - '.github/workflows/deploy-aws.yaml'
+      - '.github/workflows/swap-stack.yaml'
+      - '.github/workflows/teardown-aws.yaml'
 
 permissions:
   id-token: write
@@ -25,6 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
@@ -61,6 +66,23 @@ jobs:
           terraform validate
       - name: Terraform validate (k8s_platform)
         working-directory: infra/aws/k8s_platform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Build deploy orchestrator Lambda package
+        run: infra/aws/deploy_orchestrator/lambda/build.sh
+
+      - name: Terraform validate (deploy_orchestrator)
+        working-directory: infra/aws/deploy_orchestrator
+        env:
+          TF_VAR_aws_region: us-east-1
+          TF_VAR_github_repository: ${{ github.event.repository.name }}
+          TF_VAR_state_bucket: ci-placeholder
+          TF_VAR_state_region: us-east-1
+          TF_VAR_lock_table: ci-placeholder
+          TF_VAR_foundation_state_key: ${{ github.event.repository.name }}/foundation/terraform.tfstate
+          TF_VAR_parked_site_state_key: ${{ github.event.repository.name }}/parked-site/terraform.tfstate
         run: |
           terraform init -backend=false -input=false
           terraform validate
